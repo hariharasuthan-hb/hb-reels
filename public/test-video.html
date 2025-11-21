@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Video Test</title>
+</head>
+<body>
+    <h1>Video Test Page</h1>
+    <p>Testing video playback:</p>
+    <video controls preload="metadata" style="max-width: 800px;">
+        <source src="http://127.0.0.1:8000/storage/workout-plans/demo-videos/3209068-uhd-3840-2160-25fps-1763319487.mp4" type="video/mp4">
+        Your browser does not support the video tag.
+    </video>
+    
+    <hr>
+    <h2>Debug Info:</h2>
+    <p>Video URL: <a href="http://127.0.0.1:8000/storage/workout-plans/demo-videos/3209068-uhd-3840-2160-25fps-1763319487.mp4" target="_blank">Click to test direct access</a></p>
+    
+    <script>
+        const video = document.querySelector('video');
+        video.addEventListener('error', function(e) {
+            console.error('Video Error:', video.error);
+            document.body.innerHTML += '<p style="color:red;">Error Code: ' + video.error.code + '</p>';
+            document.body.innerHTML += '<p style="color:red;">Error Message: ' + video.error.message + '</p>';
+        });
+        video.addEventListener('loadstart', function() {
+            console.log('Video load started');
+        });
+        video.addEventListener('canplay', function() {
+            console.log('Video can play');
+        });
+        video.addEventListener('loadedmetadata', function() {
+            console.log('Video metadata loaded');
+            console.log('Duration:', video.duration);
+            console.log('Video dimensions:', video.videoWidth + 'x' + video.videoHeight);
+        });
+    </script>
+</body>
+</html>
+

@@ -1,0 +1,35 @@
+{
+    "$schema": "https://www.schemastore.org/package.json",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "build": "vite build",
+        "dev": "concurrently -n \"vite,server,ngrok\" -c \"yellow,green,blue\" \"vite\" \"php artisan serve\" \"start-ngrok.bat\"",
+        "serve": "php artisan serve",
+        "ngrok": "ngrok http 8000",
+        "serve:ngrok": "concurrently -n \"server,ngrok\" -c \"green,blue\" \"php artisan serve\" \"ngrok http 8000\"",
+        "dev:ngrok": "concurrently -n \"vite,server,ngrok\" -c \"yellow,green,blue\" \"vite\" \"php artisan serve\" \"ngrok http 8000\"",
+        "start:ngrok": "powershell -ExecutionPolicy Bypass -File ./start-ngrok.ps1",
+        "dev:windows": "powershell -ExecutionPolicy Bypass -File ./start-dev-ngrok.ps1",
+        "ngrok:url": "powershell -ExecutionPolicy Bypass -File ./get-ngrok-url.ps1"
+    },
+    "devDependencies": {
+        "@tailwindcss/forms": "^0.5.10",
+        "alpinejs": "^3.15.1",
+        "autoprefixer": "^10.4.22",
+        "axios": "^1.13.2",
+        "concurrently": "^9.2.1",
+        "laravel-vite-plugin": "^2.0.1",
+        "postcss": "^8.5.6",
+        "tailwindcss": "^3.4.18",
+        "vite": "^7.2.2"
+    },
+    "dependencies": {
+        "datatables.net": "^2.3.5",
+        "datatables.net-buttons": "^3.2.5",
+        "datatables.net-buttons-dt": "^3.2.5",
+        "datatables.net-dt": "^2.3.5",
+        "jquery": "^3.7.1",
+        "tinymce": "^8.2.2"
+    }
+}
