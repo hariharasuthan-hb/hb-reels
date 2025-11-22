@@ -109,20 +109,33 @@ Download from https://ollama.ai/download
 
 Visit `/event-reel` (or your configured route prefix) to access the generator interface.
 
-1. **Enter event description** in natural language (e.g., "Join us for Summer Sunset Party on Friday, Nov 21 at 7:00 PM at Rooftop Bar, Downtown. Enjoy live DJ sets, art installations, and open bar. RSVP now!")
-2. **OR** upload a flyer image (AI will extract text via OCR)
-3. Optionally check "Add background behind flyer" to show the flyer image in the video
-4. Click "Generate"
-5. Download your 5-second reel!
+#### Option 1: Text Description Only
+1. Enter event description in natural language (e.g., "Join us for Summer Sunset Party on Friday, Nov 21 at 7:00 PM at Rooftop Bar, Downtown. Enjoy live DJ sets, art installations, and open bar. RSVP now!")
+2. Click "Generate"
+3. **Result**: Stock video with AI-extracted captions overlaid (clean text with shadow/outline, no background box)
 
-**AI will automatically extract:**
-- Event name
-- Date & time
-- Location
-- Highlights
-- Call to action
+#### Option 2: Flyer Image + Text Overlay (Invitation Style)
+1. Upload a flyer image
+2. **DO NOT check** "Add background behind flyer"
+3. Click "Generate"
+4. **Result**: Flyer image centered on stock video background + AI-extracted event details overlaid on the flyer (creates invitation card effect)
 
-The text will appear as clean, multi-line captions centered on the video with professional styling.
+#### Option 3: Flyer Image Only (Clean Display)
+1. Upload a flyer image
+2. **CHECK** "Add background behind flyer"
+3. Click "Generate"
+4. **Result**: Flyer image centered on stock video background with NO text overlay (clean flyer showcase)
+
+### What AI Extracts Automatically
+
+From your event description or flyer text, AI will extract:
+- **Event name** - Short, catchy title
+- **Date & time** - When it happens
+- **Location** - Where it takes place
+- **Highlights** - Key features/activities (concise)
+- **Call to action** - RSVP/booking message
+
+The text appears as clean, multi-line captions with professional styling (white text, black outline, drop shadow for readability on any background).
 
 ### Programmatic Usage
 
@@ -257,11 +270,27 @@ return [
 ### Text Overlay Features
 
 The package automatically:
-- **Wraps long text** at ~35 characters per line
-- **Centers text** vertically on the video
-- **Adds professional styling**: white text with black outline and shadow for readability on any background
+- **Wraps long text** at ~35 characters per line for readability
+- **Centers text** vertically on the video (or over flyer if flyer exists)
+- **Adds professional styling**: 
+  - White text with 3px black outline
+  - Drop shadow (2px offset, 80% opacity) for depth
+  - NO background box - clean modern look
 - **Splits multi-line content** with proper spacing (80px between lines)
-- **Auto-detects system fonts**: Arial Bold (macOS), DejaVu Sans (Linux), or custom font via config
+- **Auto-detects system fonts**: 
+  - macOS: Arial Bold (`/System/Library/Fonts/Supplemental/Arial Bold.ttf`)
+  - Linux: DejaVu Sans Bold (`/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf`)
+  - Windows: Arial Bold (`C:\Windows\Fonts\arialbd.ttf`)
+  - Custom: Set via `EVENTREEL_FONT_PATH` in `.env`
+
+### Flyer + Caption Modes
+
+| Checkbox State | Flyer Uploaded | Result |
+|---------------|----------------|--------|
+| ❌ Unchecked | No | Stock video + captions |
+| ❌ Unchecked | Yes | **Flyer + captions overlay (invitation style)** |
+| ✅ Checked | Yes | Flyer only (no captions) |
+| ✅ Checked | No | Stock video + captions |
 
 ## Routes
 
@@ -305,10 +334,16 @@ Temporary files are cleaned up automatically after generation.
 - Check logs in `storage/logs/laravel.log` for text positioning debug info
 - Verify font file exists if using custom font path
 
+### Captions not showing on flyer
+- **DO NOT check** the "Add background behind flyer" checkbox
+- Checkbox checked = flyer only (no text)
+- Checkbox unchecked = flyer + captions overlay
+
 ### Video rendering fails
 - Check FFmpeg version: `ffmpeg -version` (requires 4.0+)
 - Ensure sufficient disk space in `storage/app/eventreel/`
 - Check write permissions on storage directories
+- Review `storage/logs/laravel.log` for detailed error messages
 
 ## License
 
