@@ -58,18 +58,19 @@ class AIService
 
 Required JSON format (use these exact keys):
 {
-  \"event_name\": \"the name or title of the event\",
-  \"date_time\": \"the date and time information\",
-  \"location\": \"the venue or location\",
-  \"highlights\": \"key features, activities, or attractions\",
-  \"call_to_action\": \"any RSVP, booking, or action message\"
+  \"event_name\": \"short, catchy event name (max 40 chars)\",
+  \"date_time\": \"when it happens (e.g., 'Friday, Nov 21 at 7 PM')\",
+  \"location\": \"where it happens (e.g., 'Rooftop Bar, Downtown')\",
+  \"highlights\": \"what to expect - keep it SHORT (max 60 chars)\",
+  \"call_to_action\": \"action message (e.g., 'RSVP now!' or 'Join us!')\"
 }
 
 Rules:
 1. Extract actual information from the text below
-2. If a detail is not found, write \"TBA\" for that field
-3. Keep each field concise (max 50 characters)
-4. Return ONLY the JSON object, no other text
+2. Keep all fields SHORT and concise
+3. If a detail is not found, write \"TBA\" for that field
+4. No labels, just clean values
+5. Return ONLY the JSON object, no other text
 
 Event description:
 {$eventText}

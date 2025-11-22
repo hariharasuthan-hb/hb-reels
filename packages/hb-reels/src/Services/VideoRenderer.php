@@ -164,15 +164,20 @@ class VideoRenderer
                 $safe = str_replace("'", "", $line);
                 $safe = str_replace(':', '\\:', $safe);
                 
+                // Wrap long text manually (FFmpeg doesn't have auto text wrapping)
+                $safe = $this->wrapText($safe, 35); // Wrap at ~35 characters
+                
                 // Create unique stream labels for each line to chain them properly
                 $inputLabel = $lineIndex === 0 ? '[v]' : "[v{$lineIndex}]";
                 $outputLabel = "[v" . ($lineIndex + 1) . "]";
                 
-                // Draw text WITHOUT individual box (box=0)
+                // Draw text with shadow and border for maximum visibility on any background
                 if ($fontFile && file_exists($fontFile)) {
                     $filters[] = sprintf(
-                        "%sdrawtext=fontfile=%s:text='%s':fontsize=48:fontcolor=white:" .
-                        "x=(w-text_w)/2:y=%d%s",
+                        "%sdrawtext=fontfile=%s:text='%s':fontsize=36:fontcolor=white:" .
+                        "x=(w-text_w)/2:y=%d:" .
+                        "borderw=3:bordercolor=black:" .
+                        "shadowcolor=black@0.8:shadowx=2:shadowy=2%s",
                         $inputLabel,
                         escapeshellarg($fontFile),
                         $safe,
@@ -181,8 +186,10 @@ class VideoRenderer
                     );
                 } else {
                     $filters[] = sprintf(
-                        "%sdrawtext=text='%s':fontsize=48:fontcolor=white:" .
-                        "x=(w-text_w)/2:y=%d%s",
+                        "%sdrawtext=text='%s':fontsize=36:fontcolor=white:" .
+                        "x=(w-text_w)/2:y=%d:" .
+                        "borderw=3:bordercolor=black:" .
+                        "shadowcolor=black@0.8:shadowx=2:shadowy=2%s",
                         $inputLabel,
                         $safe,
                         $currentY,
@@ -233,6 +240,39 @@ class VideoRenderer
         );
 
         return $command;
+    }
+    
+    /**
+     * Wrap text at a specified character width.
+     * Replaces spaces with \n to create line breaks.
+     */
+    private function wrapText(string $text, int $maxChars): string
+    {
+        if (strlen($text) <= $maxChars) {
+            return $text;
+        }
+        
+        $words = explode(' ', $text);
+        $lines = [];
+        $currentLine = '';
+        
+        foreach ($words as $word) {
+            if (strlen($currentLine . ' ' . $word) <= $maxChars) {
+                $currentLine .= ($currentLine ? ' ' : '') . $word;
+            } else {
+                if ($currentLine) {
+                    $lines[] = $currentLine;
+                }
+                $currentLine = $word;
+            }
+        }
+        
+        if ($currentLine) {
+            $lines[] = $currentLine;
+        }
+        
+        // Use literal \n for FFmpeg drawtext (will be rendered as newline)
+        return implode('\\n', $lines);
     }
 }
 
