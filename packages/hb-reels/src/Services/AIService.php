@@ -3,15 +3,16 @@
 namespace HbReels\EventReelGenerator\Services;
 
 use GuzzleHttp\Client;
+use GuzzleHttp\ClientInterface;
 use GuzzleHttp\Exception\GuzzleException;
 
 class AIService
 {
-    private Client $client;
+    private ClientInterface $client;
 
-    public function __construct()
+    public function __construct(?ClientInterface $client = null)
     {
-        $this->client = new Client([
+        $this->client = $client ?? new Client([
             'timeout' => 30,
         ]);
     }

@@ -49,6 +49,7 @@ return [
         'duration' => 5, // seconds
         'fps' => 30,
         'format' => 'mp4',
+        'font_path' => env('EVENTREEL_FONT_PATH', null), // Path to TTF font file for captions
     ],
 
     /*
