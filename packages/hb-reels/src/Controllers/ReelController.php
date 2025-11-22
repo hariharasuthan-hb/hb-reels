@@ -68,12 +68,27 @@ class ReelController
 
             // Get stock video from Pexels
             $stockVideoPath = $pexelsService->downloadVideo($caption);
+
+            // Determine what to show in the video:
+            // - If showFlyer is TRUE: Show flyer only, no captions
+            // - If showFlyer is FALSE and flyer exists: Show flyer + captions overlay
+            // - If showFlyer is FALSE and no flyer: Show stock video + captions
+            
+            $displayFlyerPath = $flyerPath; // Always use flyer if it exists (background)
+            $displayCaption = $showFlyer ? null : $overlayText; // Only hide caption if checkbox is checked
+            
+            \Log::info('Rendering video', [
+                'showFlyer_checkbox' => $showFlyer,
+                'flyerPath_exists' => $flyerPath ? 'yes' : 'no',
+                'displayFlyerPath' => $displayFlyerPath ? 'yes' : 'no',
+                'displayCaption' => $displayCaption,
+            ]);
             
             // Render final video
             $outputPath = $videoRenderer->render(
                 stockVideoPath: $stockVideoPath,
-                flyerPath: $showFlyer ? $flyerPath : null,
-                caption: $showFlyer ? null : $overlayText
+                flyerPath: $displayFlyerPath,
+                caption: $displayCaption
             );
 
             // Clean up temporary files

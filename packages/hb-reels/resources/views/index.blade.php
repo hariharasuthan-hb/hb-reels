@@ -77,9 +77,9 @@
                                 <p class="text-sm text-gray-600 mb-4">Describe your event and our AI will extract the key details automatically to create an engaging video reel.</p>
                             </div>
                         </div>
-                        <textarea 
-                            id="event_text" 
-                            name="event_text" 
+                    <textarea 
+                        id="event_text" 
+                        name="event_text" 
                             rows="8"
                             class="w-full px-4 py-3 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none bg-white"
                             placeholder="Example: Join us for Summer Sunset Party on Friday, Nov 21 at 7:00 PM at Rooftop R&C, Downtown. Enjoy live DJ sets, art installations, and open bar. RSVP now for early bird perks!">{{ old('event_text') }}</textarea>
@@ -189,11 +189,11 @@
         if (reelForm && generateBtn && btnText && btnLoading) {
             reelForm.addEventListener('submit', function(e) {
                 generateBtn.disabled = true;
-                btnText.classList.add('hidden');
-                btnLoading.classList.remove('hidden');
+            btnText.classList.add('hidden');
+            btnLoading.classList.remove('hidden');
 
                 scheduleButtonReset();
-            });
+        });
         }
     </script>
 </body>

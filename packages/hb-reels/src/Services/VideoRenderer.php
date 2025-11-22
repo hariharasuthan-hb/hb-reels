@@ -105,8 +105,14 @@ class VideoRenderer
             );
         }
 
-        // Add caption text overlay if provided and flyer is not shown
-        if ($caption && !$flyerPath) {
+        // Add caption text overlay if provided (can be shown over stock video OR over flyer)
+        \Log::info('VideoRenderer caption check', [
+            'caption_provided' => $caption ? 'yes' : 'no',
+            'caption_content' => $caption,
+            'flyerPath_provided' => $flyerPath ? 'yes' : 'no'
+        ]);
+        
+        if ($caption) {
             // First, normalize literal \n to actual newlines
             $caption = str_replace('\\n', "\n", $caption);
             
@@ -132,15 +138,22 @@ class VideoRenderer
                 }
             }
             
-            // Calculate starting Y position to center the text block vertically
+            // Calculate starting Y position based on whether flyer exists
             $lineCount = count($lines);
             $yStep = 80;  // Space between each line
             
             // Calculate total height needed for all lines
             $totalTextHeight = ($lineCount * $yStep);
             
-            // Center vertically: (video height - total text height) / 2
-            $yStart = intval(($height - $totalTextHeight) / 2);
+            if ($flyerPath) {
+                // Position text to appear over the flyer area (centered flyer invitation style)
+                // Flyer is 80% width and centered, so text should be in that region
+                $yStart = intval(($height - $totalTextHeight) / 2) + 50; // Slightly lower on flyer
+            } else {
+                // Center vertically on full video
+                $yStart = intval(($height - $totalTextHeight) / 2);
+            }
+            
             $currentY = $yStart;
             
             \Log::info('Text positioning', [
@@ -185,7 +198,7 @@ class VideoRenderer
                         $outputLabel
                     );
                 } else {
-                    $filters[] = sprintf(
+            $filters[] = sprintf(
                         "%sdrawtext=text='%s':fontsize=36:fontcolor=white:" .
                         "x=(w-text_w)/2:y=%d:" .
                         "borderw=3:bordercolor=black:" .
@@ -201,34 +214,19 @@ class VideoRenderer
                 $lineIndex++;
             }
             
-            // Add ONE overlay box covering all text lines
+            // Just connect the final text output to [v] for next filter (no overlay box)
             if ($lineIndex > 0) {
                 $finalTextLabel = "[v{$lineIndex}]";
-                
-                // Calculate box dimensions
-                $boxX = 40;  // Left padding from edge
-                $boxY = $yStart - 40;  // Top of first line minus padding
-                $boxWidth = $width - 80;  // Full width minus left/right padding
-                $boxHeight = $totalTextHeight + 80;  // All lines plus top/bottom padding
-                
-                // Draw a semi-transparent black rectangle as background for all text
-                $filters[] = sprintf(
-                    "%sdrawbox=x=%d:y=%d:w=%d:h=%d:color=black@0.65:t=fill[v]",
-                    $finalTextLabel,
-                    $boxX,
-                    $boxY,
-                    $boxWidth,
-                    $boxHeight
-                );
+                $filters[] = "{$finalTextLabel}null[v]";
             }
         }
 
         // Trim video to exact duration and set FPS
         $filters[] = '[v]trim=duration=' . $duration . ',setpts=PTS-STARTPTS,fps=' . $fps . '[vout]';
-        
+
         // Join all filters into a single string for filter_complex
         $filterComplex = implode(';', $filters);
- 
+
         // Build final command
         $command = sprintf(
             '%s %s -filter_complex "%s" -map "[vout]" -t %d -c:v libx264 -preset fast -crf 23 -pix_fmt yuv420p -movflags +faststart %s',

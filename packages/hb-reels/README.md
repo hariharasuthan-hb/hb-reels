@@ -5,11 +5,13 @@ A Laravel package for automatically generating 5-second vertical event reels fro
 ## Features
 
 - 📸 Upload flyer images (PNG/JPG) or paste event text
-- 🤖 AI-powered caption generation using local Ollama
+- 🤖 AI-powered event detail extraction using local Ollama
 - 🔍 OCR text extraction from images using Tesseract
 - 🎬 Automatic stock video fetching from Pexels
-- 🎥 FFmpeg-based video rendering
+- 🎥 FFmpeg-based video rendering with text overlays
 - 📱 Vertical format (1080x1920) optimized for social media
+- 📝 Auto word-wrapping for long text
+- 🎨 Professional text styling with shadows and borders for readability
 - ⚙️ Fully configurable and publishable assets
 
 ## Requirements
@@ -48,13 +50,14 @@ php artisan vendor:publish --tag=eventreel-views
 Add to your `.env` file:
 
 ```env
-PEXELS_API_KEY=OFJfQjJ4yJzccoSokaSDFByWoHaTDXaisZkuF8v9aas6ISXabomPsfiM
+PEXELS_API_KEY=your_pexels_api_key_here
 OLLAMA_URL=http://localhost:11434
 OLLAMA_MODEL=mistral
 TESSERACT_PATH=tesseract
 FFMPEG_PATH=ffmpeg
 EVENTREEL_ROUTE_PREFIX=event-reel
 EVENTREEL_STORAGE_DISK=local
+EVENTREEL_FONT_PATH=  # Optional: path to custom TTF font
 ```
 
 ### Step 5: Install System Dependencies
@@ -106,10 +109,20 @@ Download from https://ollama.ai/download
 
 Visit `/event-reel` (or your configured route prefix) to access the generator interface.
 
-1. Upload a flyer image OR paste event text
-2. Optionally check "Add background behind flyer"
-3. Click "Generate"
-4. Download your 5-second reel!
+1. **Enter event description** in natural language (e.g., "Join us for Summer Sunset Party on Friday, Nov 21 at 7:00 PM at Rooftop Bar, Downtown. Enjoy live DJ sets, art installations, and open bar. RSVP now!")
+2. **OR** upload a flyer image (AI will extract text via OCR)
+3. Optionally check "Add background behind flyer" to show the flyer image in the video
+4. Click "Generate"
+5. Download your 5-second reel!
+
+**AI will automatically extract:**
+- Event name
+- Date & time
+- Location
+- Highlights
+- Call to action
+
+The text will appear as clean, multi-line captions centered on the video with professional styling.
 
 ### Programmatic Usage
 
@@ -123,39 +136,70 @@ use HbReels\EventReelGenerator\Services\VideoRenderer;
 $ocr = app(OCRService::class);
 $text = $ocr->extractText('/path/to/flyer.jpg');
 
-// Generate AI caption
+// Extract structured event details using AI
 $ai = app(AIService::class);
+$eventDetails = $ai->extractEventDetails($text);
+// Returns: ['event_name' => '...', 'date_time' => '...', 'location' => '...', etc.]
+
+// Generate search caption for stock video
 $caption = $ai->generateCaption($text);
 
 // Get stock video
 $pexels = app(PexelsService::class);
 $videoPath = $pexels->downloadVideo($caption);
 
-// Render final video
+// Format overlay text
+$overlayText = implode("\n", array_filter([
+    $eventDetails['event_name'],
+    $eventDetails['date_time'],
+    $eventDetails['location'],
+    $eventDetails['highlights'],
+    $eventDetails['call_to_action'],
+]));
+
+// Render final video with multi-line text overlay
 $renderer = app(VideoRenderer::class);
 $outputPath = $renderer->render(
     stockVideoPath: $videoPath,
-    flyerPath: '/path/to/flyer.jpg',
-    caption: $caption
+    flyerPath: null, // or '/path/to/flyer.jpg' to show flyer
+    caption: $overlayText
 );
 ```
 
 ## Automation
 
-If you want to generate a reel from the CLI (useful for cron jobs or automation pipelines), the package ships with a command:
+### Command Line Usage
 
-```
+Generate reels from the CLI (useful for cron jobs or automation pipelines):
+
+```bash
 php artisan eventreel:generate \
-    --text="Friendsgiving karaoke · Nov 18, 8:30 PM · Orem, UT" \
-    --output=storage/app/eventreel/output/friendsgiving.mp4
+    --text="Join us for Tech Innovators Meetup on Dec 3, 6 PM at Startup Hub. Connect with founders, CTOs, and product builders!" \
+    --output=storage/app/eventreel/output/tech-meetup.mp4
 ```
 
-- `--flyer=/absolute/path/to/flyer.jpg` – OCRs text from the image and uses it in the caption  
-- `--text=` – Provide manual text instead of uploading a flyer  
-- `--show-flyer` – Overlay the flyer on the stock video (requires `--flyer`)  
-- `--output=` – Optional destination path; otherwise the generated file remains under the configured storage disk  
+**Options:**
+- `--flyer=/absolute/path/to/flyer.jpg` – Extract text from image via OCR
+- `--text="Your event description"` – Provide event description directly
+- `--show-flyer` – Overlay the flyer image on the video (requires `--flyer`)
+- `--output=/path/to/output.mp4` – Custom output path (optional)
 
-You can script this command inside deployment hooks or queue workers to automatically produce reels whenever new event data arrives.
+### NPM Scripts
+
+Start development environment with all services:
+
+```bash
+# Start Ollama + Laravel server
+npm run serve:all
+
+# Full development with Vite hot reload + Ollama + Laravel
+npm run dev:all
+
+# Start only Ollama
+npm run ollama
+```
+
+The package includes `concurrently` configuration to run multiple services simultaneously with colored output.
 
 ## Testing
 
@@ -189,8 +233,9 @@ return [
     'video' => [
         'width' => 1080,
         'height' => 1920,
-        'duration' => 5,
+        'duration' => 5,  // seconds
         'fps' => 30,
+        'font_path' => env('EVENTREEL_FONT_PATH', null), // Custom TTF font
     ],
     
     'storage' => [
@@ -198,8 +243,25 @@ return [
         'temp_path' => 'eventreel/temp',
         'output_path' => 'eventreel/output',
     ],
+    
+    'ffmpeg' => [
+        'path' => env('FFMPEG_PATH', 'ffmpeg'),
+    ],
+    
+    'tesseract' => [
+        'path' => env('TESSERACT_PATH', 'tesseract'),
+    ],
 ];
 ```
+
+### Text Overlay Features
+
+The package automatically:
+- **Wraps long text** at ~35 characters per line
+- **Centers text** vertically on the video
+- **Adds professional styling**: white text with black outline and shadow for readability on any background
+- **Splits multi-line content** with proper spacing (80px between lines)
+- **Auto-detects system fonts**: Arial Bold (macOS), DejaVu Sans (Linux), or custom font via config
 
 ## Routes
 
@@ -221,20 +283,32 @@ Temporary files are cleaned up automatically after generation.
 
 ### FFmpeg not found
 - Ensure FFmpeg is installed and in your system PATH
-- Or set `FFMPEG_PATH` in `.env` to full path
+- Or set `FFMPEG_PATH` in `.env` to full path (e.g., `/usr/local/bin/ffmpeg`)
 
 ### Tesseract not found
 - Ensure Tesseract is installed
 - Or set `TESSERACT_PATH` in `.env` to full path
 
 ### Ollama connection failed
-- Ensure Ollama is running: `ollama serve`
-- Check `OLLAMA_URL` in `.env`
-- Package will fallback to simple text processing if Ollama is unavailable
+- Ensure Ollama is running: `ollama serve` or `npm run ollama`
+- Check `OLLAMA_URL` in `.env` (default: `http://localhost:11434`)
+- Package will fallback to regex-based text extraction if Ollama is unavailable
+- For best results, ensure Mistral model is downloaded: `ollama pull mistral`
 
 ### Pexels API errors
-- Verify your API key is correct
+- Verify your API key is correct in `.env`
 - Check API rate limits (free tier: 200 requests/hour)
+- Sign up at https://www.pexels.com/api/ if you don't have a key
+
+### Text not appearing or overlapping
+- Ensure you're passing actual newline characters (`\n`) not literal backslash-n (`\\n`)
+- Check logs in `storage/logs/laravel.log` for text positioning debug info
+- Verify font file exists if using custom font path
+
+### Video rendering fails
+- Check FFmpeg version: `ffmpeg -version` (requires 4.0+)
+- Ensure sufficient disk space in `storage/app/eventreel/`
+- Check write permissions on storage directories
 
 ## License
 
