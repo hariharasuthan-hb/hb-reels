@@ -33,11 +33,6 @@ class ReelController
         $request->validate([
             'flyer_image' => 'nullable|image|mimes:jpeg,jpg,png|max:10240',
             'event_text' => 'nullable|string|max:2000',
-            'event_name' => 'nullable|string|max:255',
-            'event_datetime' => 'nullable|string|max:255',
-            'event_location' => 'nullable|string|max:255',
-            'event_highlights' => 'nullable|string|max:1000',
-            'event_call_to_action' => 'nullable|string|max:255',
             'show_flyer' => 'nullable|boolean',
             'access_code' => 'nullable|string',
         ]);
@@ -54,8 +49,7 @@ class ReelController
             $pexelsService = app(PexelsService::class);
             $videoRenderer = app(VideoRenderer::class);
 
-            $detailLines = $this->collectEventDetailLines($request);
-            $eventText = $this->buildEventPrompt($request, $ocrService, $detailLines);
+            $eventText = $this->extractEventText($request, $ocrService);
             $showFlyer = $request->boolean('show_flyer', false);
             $flyerPath = null;
 
@@ -63,13 +57,17 @@ class ReelController
                 $flyerPath = $this->storeFlyer($request->file('flyer_image'));
             }
 
-            // Generate AI caption
+            // Generate AI caption for video search
             $caption = $aiService->generateCaption($eventText);
+
+            // Extract structured event details from event text using AI
+            $eventDetails = $aiService->extractEventDetails($eventText);
+            
+            // Format overlay text from extracted details
+            $overlayText = $this->formatEventDetailsOverlay($eventDetails);
 
             // Get stock video from Pexels
             $stockVideoPath = $pexelsService->downloadVideo($caption);
-
-            $overlayText = $detailLines ? $this->formatEventOverlay($detailLines) : $caption;
             
             // Render final video
             $outputPath = $videoRenderer->render(
@@ -100,55 +98,21 @@ class ReelController
     }
 
     /**
-     * Extract event text from uploaded image or use provided text.
+     * Format event details into overlay text with line breaks.
      */
-    private function buildEventPrompt(Request $request, OCRService $ocrService, array $detailLines): string
+    private function formatEventDetailsOverlay(array $details): string
     {
-        $eventText = trim((string) $request->input('event_text', ''));
-
-        if ($eventText !== '') {
-            if ($detailLines) {
-                $eventText .= "\n\n" . implode("\n", $detailLines);
-            }
-            return $eventText;
-        }
-
-        if ($detailLines) {
-            return implode("\n", $detailLines);
-        }
-
-        return $this->extractEventText($request, $ocrService);
-    }
-
-    private function collectEventDetailLines(Request $request): array
-    {
-        $lines = [];
-        $mapping = [
-            'event_name' => 'Event Name',
-            'event_datetime' => 'Date & Time',
-            'event_location' => 'Location',
-            'event_highlights' => 'Highlights',
-            'event_call_to_action' => 'Call to Action',
-        ];
-
-        foreach ($mapping as $key => $label) {
-            $value = $request->input($key);
-            if (!is_string($value)) {
-                continue;
-            }
-            $cleanValue = trim($value);
-            if ($cleanValue === '') {
-                continue;
-            }
-            $lines[] = "{$label}: {$cleanValue}";
-        }
-
-        return $lines;
-    }
-
-    private function formatEventOverlay(array $detailLines): string
-    {
-        return implode('\\n', $detailLines);
+        // Just show the values without labels for a cleaner look
+        $lines = array_filter([
+            $details['event_name'],
+            $details['date_time'],
+            $details['location'],
+            $details['highlights'],
+            $details['call_to_action'],
+        ], fn($line) => !empty(trim($line)) && strtoupper(trim($line)) !== 'TBA');
+        
+        // Use actual newline character, not literal \n
+        return implode("\n", $lines);
     }
 
     private function extractEventText(Request $request, OCRService $ocrService): string

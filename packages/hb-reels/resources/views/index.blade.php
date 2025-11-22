@@ -65,117 +65,30 @@
                     </div>
                 </div>
 
-                {{-- Event + AI Inputs --}}
-                <div class="flex flex-col gap-6 mb-6">
-                    <section>
-                        <div class="rounded-3xl border border-gray-300 bg-white shadow-sm p-6 space-y-5">
-                            <div class="flex items-center justify-between">
-                                <h2 class="text-lg font-semibold text-gray-900">Event Details</h2>
-                                <span class="text-xs font-semibold text-blue-600 uppercase tracking-widest">Optional</span>
-                            </div>
-                            <div class="grid gap-4">
-                                <div>
-                                    <label for="event_name" class="block text-sm font-medium text-gray-700 mb-1">
-                                        Event Name
-                                    </label>
-                                    <input
-                                        id="event_name"
-                                        name="event_name"
-                                        type="text"
-                                        value="{{ old('event_name') }}"
-                                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                        placeholder="e.g. Summer Sunset Party"
-                                    >
-                                </div>
-                                <div>
-                                    <label for="event_datetime" class="block text-sm font-medium text-gray-700 mb-1">
-                                        Date &amp; Time
-                                    </label>
-                                    <input
-                                        id="event_datetime"
-                                        name="event_datetime"
-                                        type="text"
-                                        value="{{ old('event_datetime') }}"
-                                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                        placeholder="e.g. Fri, Nov 21 • 7:00 PM"
-                                    >
-                                </div>
-                                <div>
-                                    <label for="event_location" class="block text-sm font-medium text-gray-700 mb-1">
-                                        Location
-                                    </label>
-                                    <input
-                                        id="event_location"
-                                        name="event_location"
-                                        type="text"
-                                        value="{{ old('event_location') }}"
-                                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                        placeholder="e.g. Rooftop R&C, Downtown"
-                                    >
-                                </div>
-                                <div>
-                                    <label for="event_highlights" class="block text-sm font-medium text-gray-700 mb-1">
-                                        Highlights
-                                    </label>
-                                    <textarea
-                                        id="event_highlights"
-                                        name="event_highlights"
-                                        rows="3"
-                                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
-                                        placeholder="e.g. Live DJ set, art installations, open bar"
-                                    >{{ old('event_highlights') }}</textarea>
-                                </div>
-                                <div>
-                                    <label for="event_call_to_action" class="block text-sm font-medium text-gray-700 mb-1">
-                                        Call to Action
-                                    </label>
-                                    <input
-                                        id="event_call_to_action"
-                                        name="event_call_to_action"
-                                        type="text"
-                                        value="{{ old('event_call_to_action') }}"
-                                        class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                        placeholder="e.g. RSVP now for early bird perks"
-                                    >
-                                </div>
-                            </div>
-                            <div class="space-y-2 text-sm text-gray-600">
-                                <p class="font-semibold text-gray-900">Preview</p>
-                                <dl class="space-y-2">
-                                    <div>
-                                        <dt class="text-xs uppercase text-gray-500 tracking-wide">Event Name</dt>
-                                        <dd id="preview-event-name" class="text-base text-gray-800">test</dd>
-                                    </div>
-                                    <div>
-                                        <dt class="text-xs uppercase text-gray-500 tracking-wide">Date &amp; Time</dt>
-                                        <dd id="preview-event-datetime" class="text-base text-gray-800">12-12-2026</dd>
-                                    </div>
-                                    <div>
-                                        <dt class="text-xs uppercase text-gray-500 tracking-wide">Location</dt>
-                                        <dd id="preview-event-location" class="text-base text-gray-800">cocai</dd>
-                                    </div>
-                                    <div>
-                                        <dt class="text-xs uppercase text-gray-500 tracking-wide">Highlights</dt>
-                                        <dd id="preview-event-highlights" class="text-base text-gray-800">&nbsp;</dd>
-                                    </div>
-                                    <div>
-                                        <dt class="text-xs uppercase text-gray-500 tracking-wide">Call to Action</dt>
-                                        <dd id="preview-event-cta" class="text-base text-gray-800">&nbsp;</dd>
-                                    </div>
-                                </dl>
+                {{-- AI Event Description --}}
+                <div class="mb-6">
+                    <section class="space-y-4 p-6 bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-2xl">
+                        <div class="flex items-start gap-3">
+                            <svg class="w-6 h-6 text-blue-600 flex-shrink-0 mt-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                            </svg>
+                            <div class="flex-1">
+                                <h2 class="text-lg font-semibold text-gray-900 mb-1">Event Description</h2>
+                                <p class="text-sm text-gray-600 mb-4">Describe your event and our AI will extract the key details automatically to create an engaging video reel.</p>
                             </div>
                         </div>
-                    </section>
-
-                    <section class="space-y-4 p-4 bg-gray-50 border border-gray-200 rounded-2xl">
-                        <h2 class="text-lg font-semibold text-gray-900">AI Video Description</h2>
-                        <p class="text-sm text-gray-500">Describe how the video should feel, tone, pacing, or any keywords for the AI.</p>
-                    <textarea 
-                        id="event_text" 
-                        name="event_text" 
+                        <textarea 
+                            id="event_text" 
+                            name="event_text" 
                             rows="8"
-                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none"
-                            placeholder="Craft a short prompt for the AI—what should it focus on, what energy should it capture?">{{ old('event_text') }}</textarea>
+                            class="w-full px-4 py-3 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none bg-white"
+                            placeholder="Example: Join us for Summer Sunset Party on Friday, Nov 21 at 7:00 PM at Rooftop R&C, Downtown. Enjoy live DJ sets, art installations, and open bar. RSVP now for early bird perks!">{{ old('event_text') }}</textarea>
+                        <div class="flex items-center gap-2 text-xs text-blue-700">
+                            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
+                            </svg>
+                            <span>AI will automatically extract: Event Name, Date/Time, Location, Highlights, and Call-to-Action</span>
+                        </div>
                     </section>
                 </div>
 
@@ -255,13 +168,6 @@
         const generateBtn = document.getElementById('generate-btn');
         const btnText = document.getElementById('btn-text');
         const btnLoading = document.getElementById('btn-loading');
-        const previewMapping = [
-            {inputId: 'event_name', targetId: 'preview-event-name', fallback: 'test'},
-            {inputId: 'event_datetime', targetId: 'preview-event-datetime', fallback: '12-12-2026'},
-            {inputId: 'event_location', targetId: 'preview-event-location', fallback: 'cocai'},
-            {inputId: 'event_highlights', targetId: 'preview-event-highlights', fallback: 'Live DJ set, art installations, open bar'},
-            {inputId: 'event_call_to_action', targetId: 'preview-event-cta', fallback: 'RSVP now for early bird perks'},
-        ];
             
         const resetGenerateButton = () => {
             if (!generateBtn || !btnText || !btnLoading) {
@@ -280,33 +186,14 @@
             setTimeout(restoreState, 9000);
         };
 
-        const syncPreview = ({ inputId, targetId, fallback }) => {
-            const inputEl = document.getElementById(inputId);
-            const targetEl = document.getElementById(targetId);
-
-            if (!targetEl) {
-                return;
-            }
-
-            const updateValue = () => {
-                const current = inputEl?.value?.trim();
-                targetEl.textContent = current || fallback;
-            };
-
-            updateValue();
-            inputEl?.addEventListener('input', updateValue);
-        };
-
         if (reelForm && generateBtn && btnText && btnLoading) {
             reelForm.addEventListener('submit', function(e) {
                 generateBtn.disabled = true;
-            btnText.classList.add('hidden');
-            btnLoading.classList.remove('hidden');
+                btnText.classList.add('hidden');
+                btnLoading.classList.remove('hidden');
 
                 scheduleButtonReset();
-        });
-
-            previewMapping.forEach(syncPreview);
+            });
         }
     </script>
 </body>

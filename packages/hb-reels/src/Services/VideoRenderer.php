@@ -140,8 +140,15 @@ class VideoRenderer
             $totalTextHeight = ($lineCount * $yStep);
             
             // Center vertically: (video height - total text height) / 2
-            $yStart = ($height - $totalTextHeight) / 2;
+            $yStart = intval(($height - $totalTextHeight) / 2);
             $currentY = $yStart;
+            
+            \Log::info('Text positioning', [
+                'line_count' => $lineCount,
+                'lines' => $lines,
+                'y_start' => $yStart,
+                'y_step' => $yStep
+            ]);
             
             $lineIndex = 0;
             
@@ -150,6 +157,8 @@ class VideoRenderer
                 if (trim($line) === '') {
                     continue;
                 }
+                
+                \Log::info("Processing line {$lineIndex}", ['text' => $line, 'y_position' => $currentY]);
                 
                 // Escape special characters for FFmpeg
                 $safe = str_replace("'", "", $line);
