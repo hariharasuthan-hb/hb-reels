@@ -243,14 +243,21 @@ class VideoRenderer
                 'language' => $language
             ]);
 
+            // Count non-empty lines for proper labeling
+            $nonEmptyLines = array_filter($lines, function($line) {
+                return trim($line) !== '';
+            });
+            $totalNonEmptyLines = count($nonEmptyLines);
+
             $lineIndex = 0;
+            $processedLineIndex = 0;
             foreach ($lines as $line) {
                 // Skip empty lines
                 if (trim($line) === '') {
                     continue;
                 }
 
-                \Log::info("Processing line {$lineIndex} with drawtext", ['text' => $line, 'y_position' => $currentY]);
+                \Log::info("Processing line {$processedLineIndex} with drawtext", ['text' => $line, 'y_position' => $currentY]);
 
                 // Escape special characters for FFmpeg
                 $safe = str_replace("'", "", $line);
@@ -264,8 +271,10 @@ class VideoRenderer
                 $safe = $this->wrapText($safe, $wrapLimit);
 
                 // Create unique stream labels for each line to chain them properly
-                $inputLabel = $lineIndex === 0 ? '[v]' : "[v{$lineIndex}]";
-                $outputLabel = "[v" . ($lineIndex + 1) . "]";
+                $inputLabel = $processedLineIndex === 0 ? '[v]' : "[v{$processedLineIndex}]";
+                // For the last non-empty line, output directly to [v] to connect to final processing
+                $isLastLine = $processedLineIndex === $totalNonEmptyLines - 1;
+                $outputLabel = $isLastLine ? '[v]' : "[v" . ($processedLineIndex + 1) . "]";
 
                 // Draw text with shadow and border for maximum visibility on any background
                 if ($fontFile && file_exists($fontFile)) {
@@ -296,14 +305,11 @@ class VideoRenderer
                 }
 
                 $currentY += $yStep;
+                $processedLineIndex++;
                 $lineIndex++;
             }
 
-            // Just connect the final text output to [v] for next filter (no overlay box)
-            if ($lineIndex > 0) {
-                $finalTextLabel = "[v{$lineIndex}]";
-                $filters[] = "{$finalTextLabel}null[v]";
-            }
+            // Final output is already connected to [v] from the last drawtext filter
         }
     
         // Apply final video processing
