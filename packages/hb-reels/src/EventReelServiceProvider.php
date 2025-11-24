@@ -57,10 +57,11 @@ class EventReelServiceProvider extends ServiceProvider
 
     /**
      * Load package routes.
+     * Routes require authentication and active subscription (unless user is admin).
      */
     protected function loadRoutes(): void
     {
-        Route::middleware(['web'])
+        Route::middleware(['web', 'auth', 'check.subscription'])
             ->prefix(config('eventreel.route_prefix', 'event-reel'))
             ->name(config('eventreel.route_name_prefix', 'eventreel.'))
             ->group(function () {
