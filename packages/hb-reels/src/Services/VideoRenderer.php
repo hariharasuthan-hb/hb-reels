@@ -257,7 +257,11 @@ class VideoRenderer
                 $safe = str_replace(':', '\\:', $safe);
 
                 // Wrap long text manually (FFmpeg doesn't have auto text wrapping)
-                $safe = $this->wrapText($safe, 35); // Wrap at ~35 characters
+                // Use higher limit for Unicode text (Tamil, etc.) since characters take more bytes
+                $wrapLimit = in_array($language, ['ta', 'hi', 'te', 'ml', 'kn', 'bn', 'gu', 'pa', 'or', 'mr', 'th', 'my', 'km', 'lo', 'zh', 'ja', 'ko', 'ar', 'fa', 'ur'])
+                    ? 25 // Lower limit for complex scripts
+                    : 35; // Standard limit for Latin scripts
+                $safe = $this->wrapText($safe, $wrapLimit);
 
                 // Create unique stream labels for each line to chain them properly
                 $inputLabel = $lineIndex === 0 ? '[v]' : "[v{$lineIndex}]";
@@ -681,6 +685,41 @@ class VideoRenderer
         
         \Log::error('No suitable font found for language', ['language' => $language]);
         return null;
+    }
+
+    /**
+     * Wrap text at a specified character width for FFmpeg drawtext.
+     * Uses proper Unicode character counting for multilingual text.
+     */
+    private function wrapText(string $text, int $maxChars): string
+    {
+        // Use mb_strlen for proper Unicode character counting
+        if (mb_strlen($text, 'UTF-8') <= $maxChars) {
+            return $text;
+        }
+
+        $words = explode(' ', $text);
+        $lines = [];
+        $currentLine = '';
+
+        foreach ($words as $word) {
+            $testLine = $currentLine ? $currentLine . ' ' . $word : $word;
+            if (mb_strlen($testLine, 'UTF-8') <= $maxChars) {
+                $currentLine = $testLine;
+            } else {
+                if ($currentLine) {
+                    $lines[] = $currentLine;
+                }
+                $currentLine = $word;
+            }
+        }
+
+        if ($currentLine) {
+            $lines[] = $currentLine;
+        }
+
+        // Use literal \n for FFmpeg drawtext (will be rendered as newline)
+        return implode('\\n', $lines);
     }
 }
 
