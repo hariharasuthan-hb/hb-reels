@@ -5,28 +5,37 @@ namespace HbReels\EventReelGenerator\Services;
 use GuzzleHttp\Client;
 use GuzzleHttp\ClientInterface;
 use GuzzleHttp\Exception\GuzzleException;
+use Stichoza\GoogleTranslate\GoogleTranslate;
 
 class AIService
 {
     private ClientInterface $client;
+    private bool $useGoogleTranslate;
 
     public function __construct(?ClientInterface $client = null)
     {
         $this->client = $client ?? new Client([
             'timeout' => 30,
         ]);
+        
+        // Enable Google Translate for better accuracy in non-English languages
+        $this->useGoogleTranslate = config('eventreel.use_google_translate', true);
     }
 
     /**
      * Generate a polished caption from any text using Ollama.
      * Works with events, announcements, acknowledgements, or any content type.
+     * 
+     * @param string $text The text to generate caption from
+     * @param string $language Language code (e.g., 'en', 'es', 'hi', 'ta')
      */
-    public function generateCaption(string $text): string
+    public function generateCaption(string $text, string $language = 'en'): string
     {
         $ollamaUrl = config('eventreel.ollama_url', 'http://localhost:11434');
         $model = config('eventreel.ollama_model', 'mistral');
 
-        $prompt = "Rewrite the following text into a polished 1-3 line short caption for a promotional video. 
+        // Step 1: ALWAYS let AI understand and generate caption in English first
+        $prompt = "Rewrite the following text into a polished 1-3 line short caption.
 Keep it engaging and concise. The text could be an event, announcement, acknowledgement, or any message.
 Maintain the original intent and key information.
 
@@ -35,6 +44,8 @@ Text:
 
 Caption:";
 
+        $englishCaption = '';
+        
         try {
             $response = $this->client->post("{$ollamaUrl}/api/generate", [
                 'json' => [
@@ -45,30 +56,70 @@ Caption:";
             ]);
 
             $data = json_decode($response->getBody()->getContents(), true);
+            $englishCaption = trim($data['response'] ?? $text);
             
-            return trim($data['response'] ?? $text);
+            \Log::info('========== AI CAPTION GENERATION ==========');
+            \Log::info('Step 1: Original Input Text', [
+                'text' => $text,
+                'length' => strlen($text)
+            ]);
+            \Log::info('Step 2: AI Generated English Caption', [
+                'english_caption' => $englishCaption,
+                'length' => strlen($englishCaption)
+            ]);
+            
         } catch (GuzzleException $e) {
             // Fallback to simple text processing if Ollama is not available
-            return $this->fallbackCaption($text);
+            $englishCaption = $this->fallbackCaption($text);
         }
+        
+        // Step 2: If target language is not English, translate the AI-generated caption
+        if ($language !== 'en') {
+            \Log::info('Step 3: Preparing for Translation', [
+                'source_language' => 'en',
+                'target_language' => $language,
+                'text_to_translate' => $englishCaption
+            ]);
+            
+            $translatedCaption = $this->translateWithGoogle($englishCaption, $language, 'en');
+            
+            \Log::info('Step 4: Translation Complete', [
+                'target_language' => $language,
+                'translated_caption' => $translatedCaption,
+                'translation_length' => strlen($translatedCaption)
+            ]);
+            \Log::info('========== END CAPTION GENERATION ==========');
+            
+            return $translatedCaption;
+        }
+        
+        \Log::info('Step 3: No Translation Needed (English)', [
+            'returning' => $englishCaption
+        ]);
+        \Log::info('========== END CAPTION GENERATION ==========');
+        
+        return $englishCaption;
     }
 
     /**
      * Extract structured details from any text using AI.
      * Intelligently handles events, announcements, acknowledgements, or any content type.
      * Returns array with keys: line1, line2, line3, line4, line5
+     * 
+     * @param string $text The text to extract details from
+     * @param string $language Language code (e.g., 'en', 'es', 'hi', 'ta')
      */
-    public function extractEventDetails(string $text): array
+    public function extractEventDetails(string $text, string $language = 'en'): array
     {
         $ollamaUrl = config('eventreel.ollama_url', 'http://localhost:11434');
         $model = config('eventreel.ollama_model', 'mistral');
 
-        $prompt = "You are a content analyzer that extracts key information for video overlays.
-
+        // Step 1: ALWAYS let AI understand and extract details in English first
+        $prompt = "You are an expert content analyzer.
 Analyze the following text and identify its type (event, announcement, acknowledgement, promotion, etc.).
-Then extract the most important information and format it into 3-5 short lines suitable for a video overlay.
+Extract the most important information and format it into 3-5 short lines for a video overlay.
 
-IMPORTANT RULES:
+FORMATTING RULES:
 1. Each line should be SHORT (max 50 characters)
 2. Extract the most important information based on the content type
 3. For EVENTS: Include title, date/time, location, highlights, call-to-action
@@ -105,34 +156,87 @@ JSON:";
             $data = json_decode($response->getBody()->getContents(), true);
             $aiResponse = trim($data['response'] ?? '');
             
-            \Log::info('AI Response for extraction:', ['response' => $aiResponse]);
+            \Log::info('========== AI DETAIL EXTRACTION ==========');
+            \Log::info('Step 1: Original Input Text', [
+                'text' => $text,
+                'length' => strlen($text)
+            ]);
+            \Log::info('Step 2: AI Extraction Response (English)', [
+                'response' => $aiResponse,
+                'length' => strlen($aiResponse)
+            ]);
             
             // Try to extract JSON from the response (handle both clean JSON and text with JSON)
             if (preg_match('/\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/s', $aiResponse, $matches)) {
                 $extracted = json_decode($matches[0], true);
                 if ($extracted && is_array($extracted)) {
                     // Filter out empty lines
-                    $lines = [];
+                    $englishLines = [];
                     for ($i = 1; $i <= 5; $i++) {
                         $lineKey = "line{$i}";
                         if (isset($extracted[$lineKey]) && !empty(trim($extracted[$lineKey]))) {
-                            $lines[$lineKey] = trim($extracted[$lineKey]);
+                            $englishLines[$lineKey] = trim($extracted[$lineKey]);
                         }
                     }
                     
-                    // If we got at least one line, return it
-                    if (!empty($lines)) {
-                        return $lines;
+                    \Log::info('Step 3: AI Extracted English Lines', [
+                        'lines' => $englishLines,
+                        'count' => count($englishLines)
+                    ]);
+                    
+                    // If we got at least one line, translate if needed
+                    if (!empty($englishLines)) {
+                        // Step 2: If target language is not English, translate each line
+                        if ($language !== 'en') {
+                            $totalLines = count($englishLines);
+                            \Log::info('Step 4: Translating Each Line', [
+                                'source_language' => 'en',
+                                'target_language' => $language,
+                                'total_lines' => $totalLines
+                            ]);
+                            
+                            $translatedLines = [];
+                            $lineNumber = 1;
+                            foreach ($englishLines as $lineKey => $englishText) {
+                                \Log::info("Translating Line {$lineNumber}/{$totalLines}", [
+                                    'line_key' => $lineKey,
+                                    'english_text' => $englishText
+                                ]);
+                                
+                                $translatedLines[$lineKey] = $this->translateWithGoogle($englishText, $language, 'en');
+                                
+                                \Log::info("Line {$lineNumber} Translated", [
+                                    'line_key' => $lineKey,
+                                    'translated_text' => $translatedLines[$lineKey]
+                                ]);
+                                
+                                $lineNumber++;
+                            }
+                            
+                            \Log::info('Step 5: All Lines Translated', [
+                                'translated_lines' => $translatedLines
+                            ]);
+                            \Log::info('========== END DETAIL EXTRACTION ==========');
+                            
+                            return $translatedLines;
+                        }
+                        
+                        \Log::info('Step 4: No Translation Needed (English)', [
+                            'returning_lines' => $englishLines
+                        ]);
+                        \Log::info('========== END DETAIL EXTRACTION ==========');
+                        
+                        return $englishLines;
                     }
                 }
             }
             
             // Fallback if JSON extraction fails
             \Log::warning('AI extraction failed, using fallback', ['response' => $aiResponse]);
-            return $this->fallbackExtractDetails($text);
+            return $this->fallbackExtractDetails($text, $language);
         } catch (GuzzleException $e) {
             \Log::error('AI service error', ['error' => $e->getMessage()]);
-            return $this->fallbackExtractDetails($text);
+            return $this->fallbackExtractDetails($text, $language);
         }
     }
 
@@ -140,7 +244,7 @@ JSON:";
      * Fallback content extraction using simple text parsing.
      * Intelligently splits text into 3-5 meaningful lines.
      */
-    private function fallbackExtractDetails(string $text): array
+    private function fallbackExtractDetails(string $text, string $language = 'en'): array
     {
         // Clean up text
         $text = preg_replace('/\s+/', ' ', $text);
@@ -186,6 +290,15 @@ JSON:";
             $lines['line1'] = substr($text, 0, 50);
         }
         
+        // Translate if target language is not English
+        if ($language !== 'en') {
+            $translatedLines = [];
+            foreach ($lines as $lineKey => $englishText) {
+                $translatedLines[$lineKey] = $this->translateWithGoogle($englishText, $language, 'en');
+            }
+            return $translatedLines;
+        }
+        
         return $lines;
     }
 
@@ -208,6 +321,176 @@ JSON:";
         $caption = implode(' • ', array_slice($keyLines, 0, 3));
         
         return $caption ?: substr($text, 0, 100);
+    }
+    
+    /**
+     * Pre-process text for better Google Translate results.
+     * Fixes common translation issues with specific phrases.
+     */
+    private function preprocessForTranslation(string $text, string $targetLanguage): string
+    {
+        // Common phrase mappings that Google Translate gets wrong
+        $phraseMappings = [
+            // Tamil specific fixes
+            'ta' => [
+                'Starring' => 'நடிகர்',
+                'starring' => 'நடிகர்',
+                'Details to follow soon' => 'விவரங்கள் விரைவில் வரும்',
+                'details to follow soon' => 'விவரங்கள் விரைவில் வரும்',
+                'Details to follow' => 'விவரங்கள் வரும்',
+                'details to follow' => 'விவரங்கள் வரும்',
+                'Movie Title TBD' => 'படத்தின் தலைப்பு: தீர்மானிக்கப்படவில்லை',
+                'movie title TBD' => 'படத்தின் தலைப்பு: தீர்மானிக்கப்படவில்லை',
+                'Movie Title: TBD' => 'படத்தின் தலைப்பு: தீர்மானிக்கப்படவில்லை',
+                'movie title: TBD' => 'படத்தின் தலைப்பு: தீர்மானிக்கப்படவில்லை',
+                'TBD' => 'தீர்மானிக்கப்படவில்லை',
+                'New Event Announcement' => 'புதிய நிகழ்வு அறிவிப்பு',
+                'new event announcement' => 'புதிய நிகழ்வு அறிவிப்பு',
+                'Action star' => 'அதிரடி நடிகர்',
+                'action star' => 'அதிரடி நடிகர்',
+            ],
+            // Hindi specific fixes
+            'hi' => [
+                'Starring' => 'कलाकार',
+                'starring' => 'कलाकार',
+                'Details to follow soon' => 'विवरण जल्द ही आएंगे',
+                'details to follow soon' => 'विवरण जल्द ही आएंगे',
+                'Movie Title TBD' => 'फिल्म का शीर्षक: निर्धारित नहीं',
+                'movie title TBD' => 'फिल्म का शीर्षक: निर्धारित नहीं',
+                'TBD' => 'निर्धारित नहीं',
+                'New Event Announcement' => 'नई घटना की घोषणा',
+                'new event announcement' => 'नई घटना की घोषणा',
+                'Action star' => 'एक्शन स्टार',
+                'action star' => 'एक्शन स्टार',
+            ],
+            // Telugu specific fixes
+            'te' => [
+                'Starring' => 'నటించిన',
+                'starring' => 'నటించిన',
+                'Details to follow soon' => 'వివరాలు త్వరలో వస్తాయి',
+                'details to follow soon' => 'వివరాలు త్వరలో వస్తాయి',
+                'Movie Title TBD' => 'సినిమా శీర్షిక: నిర్ణయించబడలేదు',
+                'movie title TBD' => 'సినిమా శీర్షిక: నిర్ణయించబడలేదు',
+                'TBD' => 'నిర్ణయించబడలేదు',
+                'New Event Announcement' => 'కొత్త ఈవెంట్ ప్రకటన',
+                'new event announcement' => 'కొత్త ఈవెంట్ ప్రకటన',
+                'Action star' => 'యాక్షన్ స్టార్',
+                'action star' => 'యాక్షన్ స్టార్',
+            ],
+        ];
+
+        // Apply phrase mappings for the target language
+        if (isset($phraseMappings[$targetLanguage])) {
+            foreach ($phraseMappings[$targetLanguage] as $english => $translated) {
+                $text = str_replace($english, $translated, $text);
+            }
+        }
+
+        // Fix word order issues for subject-verb-object languages like Tamil
+        if ($targetLanguage === 'ta') {
+            // Fix sentences that start with "Action star [Name] announces..."
+            // Google Translate often reverses the word order
+            if (preg_match('/^(Action star|action star)\s+([^,]+),\s*(.+)$/i', $text, $matches)) {
+                $person = trim($matches[2]);
+                $action = trim($matches[3]);
+                // Reconstruct as: [Person] [action]
+                $text = $person . ' ' . $action;
+            }
+        }
+
+        return $text;
+    }
+
+    /**
+     * Translate text using Google Translate for accurate multilingual support.
+     * This provides much better quality than AI models for translation.
+     *
+     * @param string $text Text to translate
+     * @param string $targetLanguage Target language code (e.g., 'ta', 'hi', 'zh')
+     * @param string $sourceLanguage Source language code (default: 'en')
+     * @return string Translated text
+     */
+    private function translateWithGoogle(string $text, string $targetLanguage, string $sourceLanguage = 'en'): string
+    {
+        if (!$this->useGoogleTranslate || $sourceLanguage === $targetLanguage) {
+            \Log::info('Google Translate: Skipped', [
+                'reason' => $sourceLanguage === $targetLanguage ? 'Same language' : 'Disabled in config',
+                'text' => $text
+            ]);
+            return $text;
+        }
+        
+        try {
+            // Pre-process text for better translations
+            $processedText = $this->preprocessForTranslation($text, $targetLanguage);
+
+            \Log::info('>>> GOOGLE TRANSLATE REQUEST <<<', [
+                'source_language' => $sourceLanguage,
+                'target_language' => $targetLanguage,
+                'original_text' => $text,
+                'processed_text' => $processedText,
+                'input_length' => strlen($processedText),
+                'input_encoding' => mb_detect_encoding($processedText)
+            ]);
+
+            $translator = new GoogleTranslate($targetLanguage);
+            $translator->setSource($sourceLanguage);
+
+            $translated = $translator->translate($processedText);
+            
+            \Log::info('>>> GOOGLE TRANSLATE RESPONSE <<<', [
+                'source_language' => $sourceLanguage,
+                'target_language' => $targetLanguage,
+                'output_text' => $translated,
+                'output_length' => strlen($translated),
+                'output_encoding' => mb_detect_encoding($translated),
+                'has_unicode' => preg_match('/[\x{0080}-\x{FFFF}]/u', $translated) ? 'YES' : 'NO'
+            ]);
+
+            // Print exact Google Translate output to console
+            echo "\n=== GOOGLE TRANSLATE OUTPUT ===\n";
+            echo "Input:  '{$text}'\n";
+            echo "Output: '{$translated}'\n";
+            echo "From: {$sourceLanguage} → To: {$targetLanguage}\n";
+            echo "Unicode: " . (preg_match('/[\x{0080}-\x{FFFF}]/u', $translated) ? 'YES' : 'NO') . "\n";
+            echo "Length: " . strlen($translated) . " characters\n";
+            echo "=================================\n\n";
+            
+            return $translated;
+        } catch (\Exception $e) {
+            \Log::error('>>> GOOGLE TRANSLATE ERROR <<<', [
+                'error_message' => $e->getMessage(),
+                'error_trace' => $e->getTraceAsString(),
+                'input_text' => $text,
+                'falling_back_to_original' => true
+            ]);
+            
+            // Fallback to original text if translation fails
+            return $text;
+        }
+    }
+    
+    /**
+     * Detect if text is primarily in English.
+     * Simple heuristic: if more than 70% of characters are ASCII, assume English.
+     */
+    private function isEnglishText(string $text): bool
+    {
+        if (empty($text)) {
+            return true;
+        }
+        
+        $asciiCount = 0;
+        $totalCount = mb_strlen($text);
+        
+        for ($i = 0; $i < $totalCount; $i++) {
+            $char = mb_substr($text, $i, 1);
+            if (ord($char) < 128) {
+                $asciiCount++;
+            }
+        }
+        
+        return ($asciiCount / $totalCount) > 0.7;
     }
 }
 
