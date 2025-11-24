@@ -24,8 +24,15 @@ class VideoRenderer
         $duration = config('eventreel.video.duration', 5);
         $fps = config('eventreel.video.fps', 30);
 
-        // Get full paths
-        $stockVideoFullPath = Storage::disk($disk)->path($stockVideoPath);
+        // Get full paths - ensure we handle both relative and absolute paths correctly
+        $diskRoot = Storage::disk($disk)->path('');
+        if (strpos($stockVideoPath, $diskRoot) === 0) {
+            // Path is already absolute, use it directly
+            $stockVideoFullPath = $stockVideoPath;
+        } else {
+            // Path is relative, convert to absolute
+            $stockVideoFullPath = Storage::disk($disk)->path($stockVideoPath);
+        }
         $outputPath = config('eventreel.storage.output_path') . '/' . Str::random(40) . '.mp4';
         $outputFullPath = Storage::disk($disk)->path($outputPath);
 
@@ -44,7 +51,7 @@ class VideoRenderer
             $height,
             $duration,
             $fps,
-            $flyerPath ? Storage::disk($disk)->path($flyerPath) : null,
+            $flyerPath ? (strpos($flyerPath, $diskRoot) === 0 ? $flyerPath : Storage::disk($disk)->path($flyerPath)) : null,
             $caption,
             $language
         );
