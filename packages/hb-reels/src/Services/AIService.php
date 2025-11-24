@@ -18,14 +18,22 @@ class AIService
     }
 
     /**
-     * Generate a polished caption from event text using Ollama.
+     * Generate a polished caption from any text using Ollama.
+     * Works with events, announcements, acknowledgements, or any content type.
      */
-    public function generateCaption(string $eventText): string
+    public function generateCaption(string $text): string
     {
         $ollamaUrl = config('eventreel.ollama_url', 'http://localhost:11434');
         $model = config('eventreel.ollama_model', 'mistral');
 
-        $prompt = "Rewrite the following event details into a polished 1-3 line short caption for a promotional video. Keep it engaging and concise:\n\n{$eventText}";
+        $prompt = "Rewrite the following text into a polished 1-3 line short caption for a promotional video. 
+Keep it engaging and concise. The text could be an event, announcement, acknowledgement, or any message.
+Maintain the original intent and key information.
+
+Text:
+{$text}
+
+Caption:";
 
         try {
             $response = $this->client->post("{$ollamaUrl}/api/generate", [
@@ -38,42 +46,49 @@ class AIService
 
             $data = json_decode($response->getBody()->getContents(), true);
             
-            return trim($data['response'] ?? $eventText);
+            return trim($data['response'] ?? $text);
         } catch (GuzzleException $e) {
             // Fallback to simple text processing if Ollama is not available
-            return $this->fallbackCaption($eventText);
+            return $this->fallbackCaption($text);
         }
     }
 
     /**
-     * Extract structured event details from event description using AI.
-     * Returns array with keys: event_name, date_time, location, highlights, call_to_action
+     * Extract structured details from any text using AI.
+     * Intelligently handles events, announcements, acknowledgements, or any content type.
+     * Returns array with keys: line1, line2, line3, line4, line5
      */
-    public function extractEventDetails(string $eventText): array
+    public function extractEventDetails(string $text): array
     {
         $ollamaUrl = config('eventreel.ollama_url', 'http://localhost:11434');
         $model = config('eventreel.ollama_model', 'mistral');
 
-        $prompt = "You are an event information extractor. Extract the following details from the event description below and return ONLY a valid JSON object.
+        $prompt = "You are a content analyzer that extracts key information for video overlays.
+
+Analyze the following text and identify its type (event, announcement, acknowledgement, promotion, etc.).
+Then extract the most important information and format it into 3-5 short lines suitable for a video overlay.
+
+IMPORTANT RULES:
+1. Each line should be SHORT (max 50 characters)
+2. Extract the most important information based on the content type
+3. For EVENTS: Include title, date/time, location, highlights, call-to-action
+4. For ANNOUNCEMENTS: Include main message, details, date (if any), call-to-action
+5. For ACKNOWLEDGEMENTS: Include who is being acknowledged, reason, appreciation message
+6. For GENERAL content: Extract key points in logical order
+7. If information is missing, skip that line (don't use 'TBA')
+8. Return ONLY a valid JSON object with numbered lines
 
 Required JSON format (use these exact keys):
 {
-  \"event_name\": \"short, catchy event name (max 40 chars)\",
-  \"date_time\": \"when it happens (e.g., 'Friday, Nov 21 at 7 PM')\",
-  \"location\": \"where it happens (e.g., 'Rooftop Bar, Downtown')\",
-  \"highlights\": \"what to expect - keep it SHORT (max 60 chars)\",
-  \"call_to_action\": \"action message (e.g., 'RSVP now!' or 'Join us!')\"
+  \"line1\": \"First key information (title/main message)\",
+  \"line2\": \"Second key information\",
+  \"line3\": \"Third key information\",
+  \"line4\": \"Fourth key information (optional)\",
+  \"line5\": \"Fifth key information (optional, usually call-to-action)\"
 }
 
-Rules:
-1. Extract actual information from the text below
-2. Keep all fields SHORT and concise
-3. If a detail is not found, write \"TBA\" for that field
-4. No labels, just clean values
-5. Return ONLY the JSON object, no other text
-
-Event description:
-{$eventText}
+Text to analyze:
+{$text}
 
 JSON:";
 
@@ -96,74 +111,82 @@ JSON:";
             if (preg_match('/\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/s', $aiResponse, $matches)) {
                 $extracted = json_decode($matches[0], true);
                 if ($extracted && is_array($extracted)) {
-                    return [
-                        'event_name' => trim($extracted['event_name'] ?? 'Special Event'),
-                        'date_time' => trim($extracted['date_time'] ?? 'TBA'),
-                        'location' => trim($extracted['location'] ?? 'TBA'),
-                        'highlights' => trim($extracted['highlights'] ?? 'Amazing experience'),
-                        'call_to_action' => trim($extracted['call_to_action'] ?? 'Join us!'),
-                    ];
+                    // Filter out empty lines
+                    $lines = [];
+                    for ($i = 1; $i <= 5; $i++) {
+                        $lineKey = "line{$i}";
+                        if (isset($extracted[$lineKey]) && !empty(trim($extracted[$lineKey]))) {
+                            $lines[$lineKey] = trim($extracted[$lineKey]);
+                        }
+                    }
+                    
+                    // If we got at least one line, return it
+                    if (!empty($lines)) {
+                        return $lines;
+                    }
                 }
             }
             
             // Fallback if JSON extraction fails
             \Log::warning('AI extraction failed, using fallback', ['response' => $aiResponse]);
-            return $this->fallbackExtractDetails($eventText);
+            return $this->fallbackExtractDetails($text);
         } catch (GuzzleException $e) {
             \Log::error('AI service error', ['error' => $e->getMessage()]);
-            return $this->fallbackExtractDetails($eventText);
+            return $this->fallbackExtractDetails($text);
         }
     }
 
     /**
-     * Fallback event details extraction using simple text parsing.
+     * Fallback content extraction using simple text parsing.
+     * Intelligently splits text into 3-5 meaningful lines.
      */
     private function fallbackExtractDetails(string $text): array
     {
-        // Split by common separators and extract key information
+        // Clean up text
         $text = preg_replace('/\s+/', ' ', $text);
+        $text = trim($text);
         
-        // Try to find event name (usually first sentence or line)
-        $eventName = 'Special Event';
-        if (preg_match('/^(.{5,60}?)[\.\!\?]/', $text, $matches)) {
-            $eventName = trim($matches[1]);
-        } elseif (preg_match('/^(.{5,60})/', $text, $matches)) {
-            $eventName = trim($matches[1]);
+        // Split by sentences or newlines
+        $sentences = preg_split('/[\.!\?]+|\n+/', $text, -1, PREG_SPLIT_NO_EMPTY);
+        $sentences = array_map('trim', $sentences);
+        $sentences = array_filter($sentences, fn($s) => strlen($s) > 3);
+        
+        // If we have very few sentences, try to split long ones
+        if (count($sentences) < 3) {
+            $newSentences = [];
+            foreach ($sentences as $sentence) {
+                if (strlen($sentence) > 80) {
+                    // Split by commas or conjunctions
+                    $parts = preg_split('/[,;]|\s+(?:and|or|but)\s+/', $sentence, -1, PREG_SPLIT_NO_EMPTY);
+                    $newSentences = array_merge($newSentences, array_map('trim', $parts));
+                } else {
+                    $newSentences[] = $sentence;
+                }
+            }
+            $sentences = $newSentences;
         }
         
-        // Try to find date/time patterns
-        $dateTime = 'TBA';
-        if (preg_match('/((?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday|Mon|Tue|Wed|Thu|Fri|Sat|Sun|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[^\.]*\d{1,2}[^\.]*(?:\d{1,2}:\d{2})?[^\.]*(?:AM|PM|am|pm)?)/i', $text, $matches)) {
-            $dateTime = trim($matches[1]);
-        } elseif (preg_match('/(\d{1,2}[\/-]\d{1,2}[\/-]\d{2,4}[^\.]*(?:\d{1,2}:\d{2})?[^\.]*(?:AM|PM|am|pm)?)/i', $text, $matches)) {
-            $dateTime = trim($matches[1]);
+        // Build lines array (up to 5 lines)
+        $lines = [];
+        $lineCount = min(5, count($sentences));
+        
+        for ($i = 0; $i < $lineCount; $i++) {
+            if (isset($sentences[$i])) {
+                // Truncate to 50 chars if needed
+                $line = substr($sentences[$i], 0, 50);
+                if (strlen($sentences[$i]) > 50) {
+                    $line = substr($line, 0, 47) . '...';
+                }
+                $lines["line" . ($i + 1)] = $line;
+            }
         }
         
-        // Try to find location patterns
-        $location = 'TBA';
-        if (preg_match('/(?:at|@|location:|venue:)\s*([A-Z][^,\.\n]{5,50})/i', $text, $matches)) {
-            $location = trim($matches[1]);
+        // Ensure we have at least one line
+        if (empty($lines)) {
+            $lines['line1'] = substr($text, 0, 50);
         }
         
-        // Try to find highlights/activities
-        $highlights = 'Don\'t miss out!';
-        if (preg_match('/((?:enjoy|featuring|includes?|with|experience)[^\.]{10,80})/i', $text, $matches)) {
-            $highlights = trim($matches[1]);
-        }
-        
-        // Try to find call to action
-        $cta = 'Join us!';
-        if (preg_match('/((?:RSVP|register|book|reserve|sign up|get tickets)[^\.]{5,50})/i', $text, $matches)) {
-            $cta = trim($matches[1]);
-        }
-        
-        return [
-            'event_name' => substr($eventName, 0, 50),
-            'date_time' => substr($dateTime, 0, 50),
-            'location' => substr($location, 0, 50),
-            'highlights' => substr($highlights, 0, 80),
-            'call_to_action' => substr($cta, 0, 50),
-        ];
+        return $lines;
     }
 
     /**

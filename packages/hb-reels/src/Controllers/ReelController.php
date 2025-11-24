@@ -60,11 +60,11 @@ class ReelController
             // Generate AI caption for video search
             $caption = $aiService->generateCaption($eventText);
 
-            // Extract structured event details from event text using AI
-            $eventDetails = $aiService->extractEventDetails($eventText);
+            // Extract structured details from text using AI (handles any content type)
+            $contentDetails = $aiService->extractEventDetails($eventText);
             
             // Format overlay text from extracted details
-            $overlayText = $this->formatEventDetailsOverlay($eventDetails);
+            $overlayText = $this->formatContentOverlay($contentDetails);
 
             // Get stock video from Pexels
             $stockVideoPath = $pexelsService->downloadVideo($caption);
@@ -113,20 +113,24 @@ class ReelController
     }
 
     /**
-     * Format event details into overlay text with line breaks.
+     * Format content details into overlay text with line breaks.
+     * Works with any content type (events, announcements, acknowledgements, etc.)
      */
-    private function formatEventDetailsOverlay(array $details): string
+    private function formatContentOverlay(array $details): string
     {
-        // Just show the values without labels for a cleaner look
-        $lines = array_filter([
-            $details['event_name'],
-            $details['date_time'],
-            $details['location'],
-            $details['highlights'],
-            $details['call_to_action'],
-        ], fn($line) => !empty(trim($line)) && strtoupper(trim($line)) !== 'TBA');
+        // Extract lines in order (line1, line2, line3, line4, line5)
+        $lines = [];
+        for ($i = 1; $i <= 5; $i++) {
+            $lineKey = "line{$i}";
+            if (isset($details[$lineKey]) && !empty(trim($details[$lineKey]))) {
+                $lines[] = trim($details[$lineKey]);
+            }
+        }
         
-        // Use actual newline character, not literal \n
+        // Filter out empty lines
+        $lines = array_filter($lines, fn($line) => !empty(trim($line)));
+        
+        // Use actual newline character to separate lines
         return implode("\n", $lines);
     }
 

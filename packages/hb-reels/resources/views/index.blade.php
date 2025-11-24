@@ -65,7 +65,7 @@
                     </div>
                 </div>
 
-                {{-- AI Event Description --}}
+                {{-- AI Content Description --}}
                 <div class="mb-6">
                     <section class="space-y-4 p-6 bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-2xl">
                         <div class="flex items-start gap-3">
@@ -73,8 +73,8 @@
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
                             </svg>
                             <div class="flex-1">
-                                <h2 class="text-lg font-semibold text-gray-900 mb-1">Event Description</h2>
-                                <p class="text-sm text-gray-600 mb-4">Describe your event and our AI will extract the key details automatically to create an engaging video reel.</p>
+                                <h2 class="text-lg font-semibold text-gray-900 mb-1">Your Message</h2>
+                                <p class="text-sm text-gray-600 mb-4">Describe your event, announcement, acknowledgement, or any message. Our AI will understand the context and extract key details to create an engaging video reel.</p>
                             </div>
                         </div>
                     <textarea 
@@ -82,12 +82,15 @@
                         name="event_text" 
                             rows="8"
                             class="w-full px-4 py-3 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none bg-white"
-                            placeholder="Example: Join us for Summer Sunset Party on Friday, Nov 21 at 7:00 PM at Rooftop R&C, Downtown. Enjoy live DJ sets, art installations, and open bar. RSVP now for early bird perks!">{{ old('event_text') }}</textarea>
+                            placeholder="Examples:
+• Event: Join us for Summer Sunset Party on Friday, Nov 21 at 7:00 PM at Rooftop Bar, Downtown. Enjoy live DJ sets and open bar!
+• Announcement: All schools in Karur district will remain closed on Monday, Nov 25 due to heavy rainfall. Stay safe!
+• Acknowledgement: Congratulations to Team Phoenix for winning the Innovation Award 2025! Your hard work and dedication inspire us all.">{{ old('event_text') }}</textarea>
                         <div class="flex items-center gap-2 text-xs text-blue-700">
                             <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                                 <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"></path>
                             </svg>
-                            <span>AI will automatically extract: Event Name, Date/Time, Location, Highlights, and Call-to-Action</span>
+                            <span>AI intelligently extracts key information based on your content type (events, announcements, acknowledgements, etc.)</span>
                         </div>
                     </section>
                 </div>
