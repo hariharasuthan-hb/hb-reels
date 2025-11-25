@@ -35,33 +35,38 @@ class AIService
         $ollamaUrl = config('eventreel.ollama_url', 'http://localhost:11434');
         $model = config('eventreel.ollama_model', 'mistral');
 
-        // Enhanced AI analysis for better content understanding
-        $prompt = "Analyze the following text and create optimized content for video generation.
+        // Enhanced AI analysis for better content understanding and creative caption generation
+        $prompt = "You are a professional video content creator. Transform the provided text into engaging video content.
 
 CONTENT ANALYSIS:
-1. Identify the event type: birthday, wedding, corporate, product launch, celebration, etc.
-2. Determine the emotional tone: joyful, professional, romantic, energetic, elegant, etc.
-3. Extract key visual elements: colors, lighting, setting, activities, people involved
+1. Identify the event/occasion type (birthday, wedding, corporate, product launch, celebration, etc.)
+2. Determine the emotional tone (joyful, professional, romantic, energetic, elegant, etc.)
+3. Extract key visual and thematic elements (colors, lighting, setting, activities, atmosphere)
 
-CAPTION CREATION:
-- Write a polished, engaging caption (1-3 lines)
-- Make it suitable for video overlay text
-- Maintain the original message's intent and tone
+CAPTION CREATION - CRITICAL REQUIREMENT:
+- Create a BRAND NEW, creative, and engaging caption (1-3 lines maximum)
+- DO NOT copy or repeat the original text word-for-word
+- Transform the description into an exciting, professional video caption
+- Use dynamic, engaging language that captures the event's energy
+- Make it perfect for video overlay text - concise but impactful
+- Focus on the celebration, emotion, and key message
 
 VIDEO SEARCH OPTIMIZATION:
-- Provide 3-5 specific keywords for finding perfect stock footage
-- Focus on visual and atmospheric elements that match the content
-- Use terms that video search engines understand well
-- Consider: lighting style, color palette, activity type, setting, mood
+- Provide 3-5 specific visual keywords for perfect stock footage matching
+- Focus on: lighting style, colors, activities, settings, atmosphere, mood
+- Use descriptive terms video search engines understand (e.g., 'bright celebration', 'elegant lighting', 'outdoor gathering')
+- Prioritize visual and atmospheric keywords
+
+IMPORTANT: Always generate an ORIGINAL caption that enhances and transforms the input text.
 
 Return ONLY valid JSON in this exact format:
 {
-  \"caption\": \"Your polished caption text here\",
-  \"video_keywords\": [\"keyword1\", \"keyword2\", \"keyword3\", \"keyword4\", \"keyword5\"],
+  \"caption\": \"[Your creative, original caption - never copy input text]\",
+  \"video_keywords\": [\"visual keyword1\", \"visual keyword2\", \"visual keyword3\", \"atmospheric keyword4\", \"activity keyword5\"],
   \"content_analysis\": {
-    \"type\": \"birthday|wedding|corporate|celebration|other\",
-    \"tone\": \"joyful|professional|elegant|energetic|romantic\",
-    \"visual_elements\": \"bright colors|warm lighting|dramatic|natural|modern\"
+    \"type\": \"birthday|wedding|corporate|celebration|product|announcement|other\",
+    \"tone\": \"joyful|professional|elegant|energetic|romantic|warm|sophisticated\",
+    \"visual_elements\": \"bright colors|warm lighting|dramatic lighting|natural setting|modern|traditional|elegant\"
   }
 }
 
@@ -363,56 +368,112 @@ JSON:";
     }
 
     /**
-     * Extract basic keywords from text for video search when AI is unavailable.
+     * Extract basic visual keywords from text for video search when AI is unavailable.
      */
     private function extractBasicKeywords(string $text): array
     {
-        // Remove common words
-        $stopWords = ['the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'this', 'that', 'these', 'those', 'i', 'you', 'he', 'she', 'it', 'we', 'they', 'me', 'him', 'her', 'us', 'them'];
-
-        $words = str_word_count(strtolower($text), 1);
-        $keywords = array_filter($words, function($word) use ($stopWords) {
-            return !in_array($word, $stopWords) && strlen($word) > 3;
-        });
-
-        // Add some contextual keywords based on common content types
-        $contextualKeywords = [];
         $textLower = strtolower($text);
 
+        // Focus on visual and atmospheric keywords that work well for video search
+        $visualKeywords = [];
+
+        // Event-specific visual keywords
         if (strpos($textLower, 'birthday') !== false) {
-            $contextualKeywords = ['birthday', 'celebration', 'party', 'cake', 'gifts'];
+            $visualKeywords = ['birthday party', 'celebration lights', 'cake candles', 'colorful balloons', 'happy gathering'];
         } elseif (strpos($textLower, 'wedding') !== false) {
-            $contextualKeywords = ['wedding', 'marriage', 'ceremony', 'bride', 'groom'];
+            $visualKeywords = ['wedding ceremony', 'romantic lighting', 'elegant flowers', 'bridal gown', 'celebration dance'];
         } elseif (strpos($textLower, 'corporate') !== false || strpos($textLower, 'business') !== false) {
-            $contextualKeywords = ['corporate', 'business', 'meeting', 'professional', 'office'];
+            $visualKeywords = ['corporate meeting', 'professional lighting', 'business presentation', 'modern office', 'team celebration'];
+        } elseif (strpos($textLower, 'graduation') !== false) {
+            $visualKeywords = ['graduation ceremony', 'academic gowns', 'celebration crowd', 'achievement moment', 'cap throwing'];
+        } elseif (strpos($textLower, 'anniversary') !== false) {
+            $visualKeywords = ['romantic dinner', 'candlelight', 'love celebration', 'couple dancing', 'elegant atmosphere'];
+        } elseif (strpos($textLower, 'product') !== false || strpos($textLower, 'launch') !== false) {
+            $visualKeywords = ['product showcase', 'modern technology', 'innovation display', 'bright lighting', 'professional presentation'];
         } else {
-            $contextualKeywords = ['celebration', 'event', 'gathering', 'people', 'happy'];
+            // Generic celebration keywords
+            $visualKeywords = ['celebration party', 'happy gathering', 'bright lights', 'joyful moment', 'group celebration'];
         }
 
-        // Combine extracted keywords with contextual ones
-        $allKeywords = array_merge(array_values($keywords), $contextualKeywords);
-        return array_slice(array_unique($allKeywords), 0, 5); // Return up to 5 unique keywords
+        // Add time/context specific keywords
+        if (strpos($textLower, 'night') !== false || strpos($textLower, 'evening') !== false) {
+            $visualKeywords[] = 'night lighting';
+        }
+
+        if (strpos($textLower, 'outdoor') !== false || strpos($textLower, 'park') !== false || strpos($textLower, 'garden') !== false) {
+            $visualKeywords[] = 'outdoor celebration';
+        }
+
+        if (strpos($textLower, 'indoor') !== false || strpos($textLower, 'hall') !== false || strpos($textLower, 'room') !== false) {
+            $visualKeywords[] = 'indoor gathering';
+        }
+
+        return array_slice($visualKeywords, 0, 5);
     }
 
     /**
      * Fallback caption generation if Ollama is unavailable.
+     * Creates an engaging caption even without AI.
      */
     private function fallbackCaption(string $text): string
     {
-        // Simple text cleaning and truncation
+        // Clean and normalize the text
         $text = preg_replace('/\s+/', ' ', $text);
         $text = trim($text);
-        
-        // Extract key information (date, time, location)
-        $lines = explode("\n", $text);
-        $keyLines = array_filter($lines, function($line) {
-            $line = trim($line);
-            return !empty($line) && strlen($line) > 5;
-        });
-        
-        $caption = implode(' • ', array_slice($keyLines, 0, 3));
-        
-        return $caption ?: substr($text, 0, 100);
+
+        $textLower = strtolower($text);
+
+        // Detect event types and create appropriate captions
+        if (strpos($textLower, 'birthday') !== false) {
+            if (preg_match('/(\d+)(?:th|st|nd|rd)?\s*birthday/i', $text, $matches)) {
+                return "Celebrating {$matches[1]} Amazing Years! 🎉";
+            }
+            return "Happy Birthday Celebration! 🎂";
+        }
+
+        if (strpos($textLower, 'wedding') !== false) {
+            return "Forever Begins Today! 💍";
+        }
+
+        if (strpos($textLower, 'anniversary') !== false) {
+            return "Celebrating Love & Togetherness! 💕";
+        }
+
+        if (strpos($textLower, 'graduation') !== false) {
+            return "Achievement Unlocked! 🎓";
+        }
+
+        if (strpos($textLower, 'corporate') !== false || strpos($textLower, 'business') !== false) {
+            return "Excellence in Action! 🚀";
+        }
+
+        if (strpos($textLower, 'product') !== false || strpos($textLower, 'launch') !== false) {
+            return "Innovation Meets Excellence! ✨";
+        }
+
+        if (strpos($textLower, 'celebration') !== false || strpos($textLower, 'party') !== false) {
+            return "Making Memories Together! 🎊";
+        }
+
+        if (strpos($textLower, 'success') !== false || strpos($textLower, 'achievement') !== false) {
+            return "Success Story in Motion! 🏆";
+        }
+
+        // Generic celebration captions based on keywords
+        if (strpos($textLower, 'happy') !== false || strpos($textLower, 'joy') !== false) {
+            return "Spreading Joy & Happiness! 😊";
+        }
+
+        if (strpos($textLower, 'love') !== false || strpos($textLower, 'heart') !== false) {
+            return "Love Makes Everything Beautiful! 💖";
+        }
+
+        if (strpos($textLower, 'together') !== false || strpos($textLower, 'family') !== false) {
+            return "Together We Celebrate! 👨‍👩‍👧‍👦";
+        }
+
+        // Default engaging caption
+        return "Creating Amazing Moments! 🌟";
     }
     
     /**
