@@ -25,80 +25,140 @@ class AIService
     /**
      * Generate a polished caption from any text using Ollama.
      * Works with events, announcements, acknowledgements, or any content type.
-     * 
+     *
      * @param string $text The text to generate caption from
      * @param string $language Language code (e.g., 'en', 'es', 'hi', 'ta')
+     * @return array Returns array with 'caption' and 'video_keywords' keys
      */
-    public function generateCaption(string $text, string $language = 'en'): string
+    public function generateCaption(string $text, string $language = 'en'): array
     {
         $ollamaUrl = config('eventreel.ollama_url', 'http://localhost:11434');
         $model = config('eventreel.ollama_model', 'mistral');
 
-        // Step 1: ALWAYS let AI understand and generate caption in English first
-        $prompt = "Rewrite the following text into a polished 1-3 line short caption.
-Keep it engaging and concise. The text could be an event, announcement, acknowledgement, or any message.
-Maintain the original intent and key information.
+        // Enhanced AI analysis for better content understanding
+        $prompt = "Analyze the following text and create optimized content for video generation.
 
-Text:
+CONTENT ANALYSIS:
+1. Identify the event type: birthday, wedding, corporate, product launch, celebration, etc.
+2. Determine the emotional tone: joyful, professional, romantic, energetic, elegant, etc.
+3. Extract key visual elements: colors, lighting, setting, activities, people involved
+
+CAPTION CREATION:
+- Write a polished, engaging caption (1-3 lines)
+- Make it suitable for video overlay text
+- Maintain the original message's intent and tone
+
+VIDEO SEARCH OPTIMIZATION:
+- Provide 3-5 specific keywords for finding perfect stock footage
+- Focus on visual and atmospheric elements that match the content
+- Use terms that video search engines understand well
+- Consider: lighting style, color palette, activity type, setting, mood
+
+Return ONLY valid JSON in this exact format:
+{
+  \"caption\": \"Your polished caption text here\",
+  \"video_keywords\": [\"keyword1\", \"keyword2\", \"keyword3\", \"keyword4\", \"keyword5\"],
+  \"content_analysis\": {
+    \"type\": \"birthday|wedding|corporate|celebration|other\",
+    \"tone\": \"joyful|professional|elegant|energetic|romantic\",
+    \"visual_elements\": \"bright colors|warm lighting|dramatic|natural|modern\"
+  }
+}
+
+Text to analyze:
 {$text}
 
-Caption:";
+JSON:";
 
-        $englishCaption = '';
-        
+        // Default fallback result
+        $result = [
+            'caption' => $this->fallbackCaption($text),
+            'video_keywords' => $this->extractBasicKeywords($text),
+            'content_analysis' => [
+                'type' => 'celebration',
+                'tone' => 'joyful',
+                'visual_elements' => 'bright colors'
+            ]
+        ];
+
         try {
             $response = $this->client->post("{$ollamaUrl}/api/generate", [
                 'json' => [
                     'model' => $model,
                     'prompt' => $prompt,
                     'stream' => false,
+                    'temperature' => 0.7, // Balanced creativity and consistency
                 ],
             ]);
 
             $data = json_decode($response->getBody()->getContents(), true);
-            $englishCaption = trim($data['response'] ?? $text);
-            
-            \Log::info('========== AI CAPTION GENERATION ==========');
+            $aiResponse = trim($data['response'] ?? '');
+
+            \Log::info('========== AI CONTENT ANALYSIS ==========');
             \Log::info('Step 1: Original Input Text', [
                 'text' => $text,
                 'length' => strlen($text)
             ]);
-            \Log::info('Step 2: AI Generated English Caption', [
-                'english_caption' => $englishCaption,
-                'length' => strlen($englishCaption)
+            \Log::info('Step 2: AI Raw Response', [
+                'response' => $aiResponse,
+                'length' => strlen($aiResponse)
             ]);
-            
+
+            // Parse JSON response
+            if (!empty($aiResponse)) {
+                // Extract JSON from response
+                if (preg_match('/\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/s', $aiResponse, $matches)) {
+                    $parsed = json_decode($matches[0], true);
+                    if ($parsed && isset($parsed['caption'])) {
+                        $result = $parsed;
+                        \Log::info('Step 3: Successfully parsed AI content analysis', [
+                            'caption' => $result['caption'],
+                            'video_keywords' => $result['video_keywords'] ?? [],
+                            'content_type' => $result['content_analysis']['type'] ?? 'unknown',
+                            'tone' => $result['content_analysis']['tone'] ?? 'unknown'
+                        ]);
+                    } else {
+                        \Log::warning('AI returned invalid JSON structure', ['parsed' => $parsed]);
+                    }
+                } else {
+                    \Log::warning('No valid JSON found in AI response', ['response' => $aiResponse]);
+                }
+            }
+
         } catch (GuzzleException $e) {
-            // Fallback to simple text processing if Ollama is not available
-            $englishCaption = $this->fallbackCaption($text);
+            \Log::warning('AI content analysis failed, using fallback', [
+                'error' => $e->getMessage(),
+                'fallback_caption' => $result['caption']
+            ]);
         }
         
-        // Step 2: If target language is not English, translate the AI-generated caption
+        // Step 2: If target language is not English, translate the caption
         if ($language !== 'en') {
-            \Log::info('Step 3: Preparing for Translation', [
+            \Log::info('Step 4: Preparing for Translation', [
                 'source_language' => 'en',
                 'target_language' => $language,
-                'text_to_translate' => $englishCaption
+                'caption_to_translate' => $result['caption']
             ]);
-            
-            $translatedCaption = $this->translateWithGoogle($englishCaption, $language, 'en');
-            
-            \Log::info('Step 4: Translation Complete', [
+
+            $result['caption'] = $this->translateWithGoogle($result['caption'], $language, 'en');
+
+            \Log::info('Step 5: Translation Complete', [
                 'target_language' => $language,
-                'translated_caption' => $translatedCaption,
-                'translation_length' => strlen($translatedCaption)
+                'translated_caption' => $result['caption'],
+                'video_keywords_unchanged' => $result['video_keywords'] // Keywords stay in English for better search
             ]);
-            \Log::info('========== END CAPTION GENERATION ==========');
-            
-            return $translatedCaption;
+            \Log::info('========== END CONTENT ANALYSIS ==========');
+
+            return $result;
         }
-        
-        \Log::info('Step 3: No Translation Needed (English)', [
-            'returning' => $englishCaption
+
+        \Log::info('Step 4: No Translation Needed (English)', [
+            'returning_caption' => $result['caption'],
+            'video_keywords' => $result['video_keywords']
         ]);
-        \Log::info('========== END CAPTION GENERATION ==========');
-        
-        return $englishCaption;
+        \Log::info('========== END CONTENT ANALYSIS ==========');
+
+        return $result;
     }
 
     /**
@@ -300,6 +360,38 @@ JSON:";
         }
         
         return $lines;
+    }
+
+    /**
+     * Extract basic keywords from text for video search when AI is unavailable.
+     */
+    private function extractBasicKeywords(string $text): array
+    {
+        // Remove common words
+        $stopWords = ['the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'is', 'are', 'was', 'were', 'be', 'been', 'being', 'this', 'that', 'these', 'those', 'i', 'you', 'he', 'she', 'it', 'we', 'they', 'me', 'him', 'her', 'us', 'them'];
+
+        $words = str_word_count(strtolower($text), 1);
+        $keywords = array_filter($words, function($word) use ($stopWords) {
+            return !in_array($word, $stopWords) && strlen($word) > 3;
+        });
+
+        // Add some contextual keywords based on common content types
+        $contextualKeywords = [];
+        $textLower = strtolower($text);
+
+        if (strpos($textLower, 'birthday') !== false) {
+            $contextualKeywords = ['birthday', 'celebration', 'party', 'cake', 'gifts'];
+        } elseif (strpos($textLower, 'wedding') !== false) {
+            $contextualKeywords = ['wedding', 'marriage', 'ceremony', 'bride', 'groom'];
+        } elseif (strpos($textLower, 'corporate') !== false || strpos($textLower, 'business') !== false) {
+            $contextualKeywords = ['corporate', 'business', 'meeting', 'professional', 'office'];
+        } else {
+            $contextualKeywords = ['celebration', 'event', 'gathering', 'people', 'happy'];
+        }
+
+        // Combine extracted keywords with contextual ones
+        $allKeywords = array_merge(array_values($keywords), $contextualKeywords);
+        return array_slice(array_unique($allKeywords), 0, 5); // Return up to 5 unique keywords
     }
 
     /**
