@@ -146,7 +146,7 @@
 
         {{-- Branding --}}
         <div class="mt-8 text-center">
-            <h2 class="text-3xl font-bold text-white mb-2">Planmyweekend.ai</h2>
+            <h2 class="text-3xl font-bold text-white mb-2">HBITPartner.ai</h2>
             <p class="text-white text-sm">Instantly Find FREE Local Things To Do With Our AI</p>
         </div>
     </div>
