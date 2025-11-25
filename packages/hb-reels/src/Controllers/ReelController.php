@@ -57,17 +57,32 @@ class ReelController
                 $flyerPath = $this->storeFlyer($request->file('flyer_image'));
             }
 
-            // Generate AI caption for video search
-            $caption = $aiService->generateCaption($eventText);
+            // Generate AI caption and video search optimization
+            $contentAnalysis = $aiService->generateCaption($eventText);
+            $caption = $contentAnalysis['caption'];
+            $videoKeywords = $contentAnalysis['video_keywords'] ?? [];
+
+            \Log::info('AI Content Analysis Complete', [
+                'caption' => $caption,
+                'video_keywords' => $videoKeywords,
+                'content_type' => $contentAnalysis['content_analysis']['type'] ?? 'unknown',
+                'tone' => $contentAnalysis['content_analysis']['tone'] ?? 'unknown'
+            ]);
 
             // Extract structured details from text using AI (handles any content type)
             $contentDetails = $aiService->extractEventDetails($eventText);
-            
+
             // Format overlay text from extracted details
             $overlayText = $this->formatContentOverlay($contentDetails);
 
-            // Get stock video from Pexels
-            $stockVideoPath = $pexelsService->downloadVideo($caption);
+            // Get stock video from Pexels using optimized keywords
+            $videoSearchTerm = $this->createOptimalVideoSearch($caption, $videoKeywords);
+            \Log::info('Starting Pexels video download', [
+                'caption' => $caption,
+                'optimized_search' => $videoSearchTerm,
+                'ai_keywords' => $videoKeywords
+            ]);
+            $stockVideoPath = $pexelsService->downloadVideo($videoSearchTerm);
 
             // Determine what to show in the video:
             // - If showFlyer is TRUE: Show flyer only, no captions
@@ -149,15 +164,60 @@ class ReelController
     }
 
     /**
+     * Create optimal video search term using AI-generated keywords.
+     */
+    private function createOptimalVideoSearch(string $caption, array $videoKeywords): string
+    {
+        // If we have AI-generated keywords, use them as primary search terms
+        if (!empty($videoKeywords)) {
+            // Take top 3 AI keywords for best relevance
+            $primaryKeywords = array_slice($videoKeywords, 0, 3);
+
+            // Add some fallback keywords if AI keywords are too specific
+            $searchTerms = $primaryKeywords;
+
+            // If AI keywords don't include obvious terms, add contextual ones
+            $hasContext = false;
+            foreach ($videoKeywords as $keyword) {
+                if (in_array(strtolower($keyword), ['birthday', 'wedding', 'celebration', 'party', 'event', 'corporate'])) {
+                    $hasContext = true;
+                    break;
+                }
+            }
+
+            if (!$hasContext) {
+                // Add contextual terms based on caption content
+                if (stripos($caption, 'birthday') !== false) {
+                    $searchTerms[] = 'birthday';
+                } elseif (stripos($caption, 'wedding') !== false) {
+                    $searchTerms[] = 'wedding';
+                } else {
+                    $searchTerms[] = 'celebration';
+                }
+            }
+
+            return implode(' ', array_unique($searchTerms));
+        }
+
+        // Fallback to caption-based keyword extraction
+        $words = explode(' ', strtolower($caption));
+        $keywords = array_filter($words, function($word) {
+            return strlen($word) > 3 && !in_array($word, ['this', 'that', 'with', 'from', 'your', 'will', 'have', 'been', 'were']);
+        });
+
+        return implode(' ', array_slice($keywords, 0, 3)) ?: 'celebration event';
+    }
+
+    /**
      * Store uploaded flyer image.
      */
     private function storeFlyer($file): string
     {
         $disk = config('eventreel.storage.disk');
         $path = config('eventreel.storage.temp_path') . '/' . Str::random(40) . '.' . $file->getClientOriginalExtension();
-        
+
         Storage::disk($disk)->put($path, file_get_contents($file->getRealPath()));
-        
+
         return $path;
     }
 }
