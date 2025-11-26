@@ -54,7 +54,7 @@ class VideoRenderer
         }
 
         // Build FFmpeg command
-        $command = $this->buildFFmpegCommand(
+        $result = $this->buildFFmpegCommand(
             $ffmpegPath,
             $stockVideoFullPath,
             $outputFullPath,
@@ -66,6 +66,9 @@ class VideoRenderer
             $caption,
             $language
         );
+
+        $command = $result['command'];
+        $tempFiles = $result['tempFiles'];
         // Set fontconfig environment for proper Tamil shaping (force fontconfig over macOS CoreText)
         $fontDir = dirname($this->getFontForLanguage($language ?? 'en'));
         putenv("FC_CONFIG_DIR={$fontDir}");
@@ -153,6 +156,7 @@ class VideoRenderer
 
     /**
      * Build FFmpeg command based on rendering mode.
+     * Returns array with 'command' and 'tempFiles' keys.
      */
     private function buildFFmpegCommand(
         string $ffmpegPath,
@@ -329,7 +333,7 @@ class VideoRenderer
             'full_command' => $command
         ]);
     
-        return $command;
+        return ['command' => $command, 'tempFiles' => $tempFiles];
     }
     
     
