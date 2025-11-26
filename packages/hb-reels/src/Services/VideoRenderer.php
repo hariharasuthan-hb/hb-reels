@@ -66,7 +66,7 @@ class VideoRenderer
             $caption,
             $language
         );
-        // dd($command);
+         // dd($command);
         // Set fontconfig environment for proper Tamil shaping (force fontconfig over macOS CoreText)
         $fontDir = dirname($this->getFontForLanguage($language ?? 'en'));
         putenv("FC_CONFIG_DIR={$fontDir}");
@@ -170,101 +170,38 @@ class VideoRenderer
                 $fps
             );
         } elseif (!$hasFlyer && $hasCaption) {
-            // Scenario 2: Video + Caption only
-            // Use drawtext for Tamil, ASS for other languages (ASS having issues with FFmpeg 8.0.1)
-            $isTamil = ($language === 'ta' || preg_match('/[\x{0B80}-\x{0BFF}]/u', $caption));
-
-            // Use drawtext for ALL languages with appropriate fonts (like the user's FFmpeg example)
-            $fontFile = $this->getFontForLanguage($language);
-
-            \Log::info('Using drawtext for all languages with proper fonts', [
+            // Scenario 2: Video + Caption only - USING ASS SUBTITLES
+            \Log::info('Using ASS subtitles for video + caption', [
                 'language' => $language,
                 'caption_length' => mb_strlen($caption, 'UTF-8'),
-                'caption_preview' => substr($caption, 0, 50),
-                'font_file' => $fontFile,
-                'font_exists' => $fontFile ? file_exists($fontFile) : false
+                'caption_preview' => substr($caption, 0, 50)
             ]);
 
-            // Apply appropriate text wrapping based on language
-            if ($language === 'ta' || preg_match('/[\x{0B80}-\x{0BFF}]/u', $caption)) {
-                // Tamil text wrapping
-                $wrappedCaption = $this->wrapTamilText($caption);
-            } else {
-                // Other languages - simple word wrapping
-                $wrappedCaption = wordwrap($caption, 35, "\n", true);
-            }
+            // Create ASS subtitle file
+            $assFilePath = $this->createASSFile($caption, $language, $width, $height);
+            $tempFiles[] = $assFilePath; // Track for cleanup
 
-            // Split into individual lines and create separate drawtext filters
-            $lines = explode("\n", $wrappedCaption);
-            $lineHeight = 80; // Space between lines
-            $startY = intval($height * 0.6); // Start at 60% down the screen
-
-            // Build the initial scaling filter
-            $scaleFilter = sprintf(
-                '[0:v]scale=%d:%d:force_original_aspect_ratio=decrease,pad=%d:%d:(ow-iw)/2:(oh-ih)/2,setsar=1',
+            // Build FFmpeg filter chain with ASS subtitles
+            $filters[] = sprintf(
+                '[0:v]scale=%d:%d:force_original_aspect_ratio=decrease,pad=%d:%d:(ow-iw)/2:(oh-ih)/2,setsar=1,subtitles=%s[v]',
                 $width,
                 $height,
                 $width,
-                $height
+                $height,
+                escapeshellarg($assFilePath)
             );
 
-            // Add individual drawtext filters for each line
-            $drawtextFilters = [];
-            foreach ($lines as $index => $line) {
-                if (empty(trim($line))) continue;
-
-                // Escape special characters for FFmpeg - ORDER MATTERS!
-                // Escape backslash first, then other special chars
-                $escapedLine = str_replace('\\', '\\\\', $line);
-                $escapedLine = str_replace("'", "\\'", $escapedLine);
-                $escapedLine = str_replace(':', '\\:', $escapedLine);
-                $escapedLine = str_replace('%', '%%', $escapedLine);
-
-                $yPosition = $startY + ($index * $lineHeight);
-
-                if ($index === 0) {
-                    // First filter starts from the scaled video
-                    $drawtextFilters[] = sprintf(
-                        '%s,drawtext=fontfile=%s:text=%s:fontsize=64:fontcolor=white:borderw=5:x=(w-text_w)/2:y=%d',
-                        $scaleFilter,
-                        escapeshellarg($fontFile),
-                        "'$escapedLine'",
-                        $yPosition
-                    );
-                } else {
-                    // Subsequent filters chain from previous
-                    $drawtextFilters[] = sprintf(
-                        'drawtext=fontfile=%s:text=%s:fontsize=64:fontcolor=white:borderw=5:x=(w-text_w)/2:y=%d',
-                        escapeshellarg($fontFile),
-                        "'$escapedLine'",
-                        $yPosition
-                    );
-                }
-            }
-
-            // Combine all drawtext filters with semicolons
-            $combinedDrawtext = implode(',', $drawtextFilters);
-
-            // Add output label
-            $drawtextFilter = $combinedDrawtext . '[v]';
-
-            // Add trim and fps processing
-            $processingFilter = sprintf(
+            $filters[] = sprintf(
                 '[v]trim=duration=%d,setpts=PTS-STARTPTS,fps=%d[vout]',
                 $duration,
                 $fps
             );
 
-            \Log::info('Individual drawtext filters constructed', [
+            \Log::info('ASS subtitle filter constructed', [
                 'language' => $language,
-                'total_lines' => count($lines),
-                'filters_combined' => $drawtextFilter,
-                'processing_filter' => $processingFilter,
-                'font_file' => $fontFile
+                'ass_file' => $assFilePath,
+                'file_exists' => file_exists($assFilePath)
             ]);
-
-            $filters[] = $drawtextFilter;
-            $filters[] = $processingFilter;
         } elseif ($hasFlyer && !$hasCaption) {
             // Scenario 3: Video + Flyer (no caption)
             $filters[] = sprintf(
@@ -285,33 +222,18 @@ class VideoRenderer
                 $fps
             );
         } elseif ($hasFlyer && $hasCaption) {
-            // Scenario 4: Video + Flyer + Caption
-            // Use drawtext for ALL languages with appropriate fonts
-            $fontFile = $this->getFontForLanguage($language);
-
-            \Log::info('Using drawtext for all languages with flyer', [
+            // Scenario 4: Video + Flyer + Caption - USING ASS SUBTITLES
+            \Log::info('Using ASS subtitles for video + flyer + caption', [
                 'language' => $language,
                 'caption_length' => mb_strlen($caption, 'UTF-8'),
-                'caption_preview' => substr($caption, 0, 50),
-                'font_file' => $fontFile,
-                'font_exists' => $fontFile ? file_exists($fontFile) : false
+                'caption_preview' => substr($caption, 0, 50)
             ]);
 
-            // Apply appropriate text wrapping based on language
-            if ($language === 'ta' || preg_match('/[\x{0B80}-\x{0BFF}]/u', $caption)) {
-                // Tamil text wrapping
-                $wrappedCaption = $this->wrapTamilText($caption);
-            } else {
-                // Other languages - simple word wrapping
-                $wrappedCaption = wordwrap($caption, 35, "\n", true);
-            }
+            // Create ASS subtitle file
+            $assFilePath = $this->createASSFile($caption, $language, $width, $height);
+            $tempFiles[] = $assFilePath; // Track for cleanup
 
-            // Split into individual lines and create separate drawtext filters for flyer
-            $lines = explode("\n", $wrappedCaption);
-            $lineHeight = 80; // Space between lines
-            $startY = intval($height * 0.75); // Start lower for flyer overlay
-
-            // Build the base filters
+            // Build FFmpeg filter chain: scale video, scale flyer, overlay flyer, then apply subtitles
             $filters[] = sprintf(
                 '[0:v]scale=%d:%d:force_original_aspect_ratio=decrease,pad=%d:%d:(ow-iw)/2:(oh-ih)/2,setsar=1[v0]',
                 $width,
@@ -323,57 +245,21 @@ class VideoRenderer
                 '[1:v]scale=%d:-1[flyer]',
                 intval($width * 0.8)
             );
-
-            // Start with overlay
-            $overlayFilter = '[v0][flyer]overlay=(W-w)/2:(H-h)/2';
-
-            // Add individual drawtext filters for each line after overlay
-            $drawtextFilters = [];
-            foreach ($lines as $index => $line) {
-                if (empty(trim($line))) continue;
-
-                // Escape special characters for FFmpeg - ORDER MATTERS!
-                // Escape backslash first, then other special chars
-                $escapedLine = str_replace('\\', '\\\\', $line);
-                $escapedLine = str_replace("'", "\\'", $escapedLine);
-                $escapedLine = str_replace(':', '\\:', $escapedLine);
-                $escapedLine = str_replace('%', '%%', $escapedLine);
-
-                $yPosition = $startY + ($index * $lineHeight);
-
-                $drawtextFilters[] = sprintf(
-                    'drawtext=fontfile=%s:text=%s:fontsize=64:fontcolor=white:borderw=5:x=(w-text_w)/2:y=%d',
-                    escapeshellarg($fontFile),
-                    "'$escapedLine'",
-                    $yPosition
-                );
-            }
-
-            // Combine overlay with drawtext filters
-            if (!empty($drawtextFilters)) {
-                $overlayFilter .= ',' . implode(',', $drawtextFilters);
-            }
-
-            // Add output label
-            $flyerDrawtextFilter = $overlayFilter . '[v]';
-
-            // Add trim and fps processing
-            $flyerProcessingFilter = sprintf(
+            $filters[] = sprintf(
+                '[v0][flyer]overlay=(W-w)/2:(H-h)/2,subtitles=%s[v]',
+                escapeshellarg($assFilePath)
+            );
+            $filters[] = sprintf(
                 '[v]trim=duration=%d,setpts=PTS-STARTPTS,fps=%d[vout]',
                 $duration,
                 $fps
             );
 
-            \Log::info('Individual flyer drawtext filters constructed', [
+            \Log::info('ASS subtitle filter constructed for flyer + caption', [
                 'language' => $language,
-                'total_lines' => count($lines),
-                'overlay_filter' => $flyerDrawtextFilter,
-                'processing_filter' => $flyerProcessingFilter,
-                'font_file' => $fontFile
+                'ass_file' => $assFilePath,
+                'file_exists' => file_exists($assFilePath)
             ]);
-
-            $filters[] = $flyerDrawtextFilter;
-            $filters[] = $flyerProcessingFilter;
         }
     
         // Log rendering scenario
@@ -408,7 +294,15 @@ class VideoRenderer
             'has_mp4_extension' => preg_match('/\.mp4$/i', $outputPath) ? 'YES' : 'NO'
         ]);
 
-        // Note: No ASS temp files to clean up - using drawtext for all languages
+        // Clean up temporary ASS files
+        if (!empty($tempFiles)) {
+            foreach ($tempFiles as $tempFile) {
+                if (file_exists($tempFile)) {
+                    @unlink($tempFile);
+                    \Log::info('Cleaned up temporary ASS file', ['file' => $tempFile]);
+                }
+            }
+        }
     
         \Log::info('========== FINAL FFMPEG COMMAND ==========');
         \Log::info('FFmpeg command', [
