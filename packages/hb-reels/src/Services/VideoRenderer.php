@@ -95,18 +95,30 @@ class VideoRenderer
             throw new \Exception('Output path does not contain expected directory structure: ' . $outputPath);
         }
 
+        // Validate ASS files exist before running FFmpeg
+        if (!empty($tempFiles)) {
+            foreach ($tempFiles as $tempFile) {
+                if (!file_exists($tempFile)) {
+                    throw new \Exception('ASS subtitle file not found before FFmpeg execution: ' . $tempFile);
+                }
+                \Log::info('ASS file validated before FFmpeg', [
+                    'file' => $tempFile,
+                    'exists' => file_exists($tempFile),
+                    'size' => file_exists($tempFile) ? filesize($tempFile) : 0,
+                    'permissions' => file_exists($tempFile) ? substr(sprintf('%o', fileperms($tempFile)), -4) : 'N/A'
+                ]);
+            }
+        }
+
         // Execute FFmpeg
         exec($command . ' 2>&1', $output, $returnCode);
 
-        // Clean up temporary files
-        $tempDir = storage_path('app/temp');
-        if (is_dir($tempDir)) {
-            // Clean up old temporary files
-            $oldTempFiles = glob($tempDir . '/*');
-            foreach ($oldTempFiles as $tempFile) {
-                // Only delete files older than 5 minutes to avoid conflicts
-                if (file_exists($tempFile) && (time() - filemtime($tempFile)) > 300) {
+        // Clean up temporary ASS files created for this rendering job
+        if (!empty($tempFiles)) {
+            foreach ($tempFiles as $tempFile) {
+                if (file_exists($tempFile)) {
                     @unlink($tempFile);
+                    \Log::info('Cleaned up temporary ASS file', ['file' => $tempFile]);
                 }
             }
         }
@@ -177,6 +189,11 @@ class VideoRenderer
             $assFilePath = $this->createASSFile($caption, $language, $width, $height);
             $tempFiles[] = $assFilePath; // Track for cleanup
 
+            \Log::info('ASS file added to temp files tracking', [
+                'file_path' => $assFilePath,
+                'temp_files_count' => count($tempFiles)
+            ]);
+
             // Build FFmpeg filter chain with ASS subtitles (all in one filter chain)
             $filters[] = sprintf(
                 '[0:v]scale=%d:%d:force_original_aspect_ratio=decrease,pad=%d:%d:(ow-iw)/2:(oh-ih)/2,setsar=1,subtitles=%s[v];[v]trim=duration=%d,setpts=PTS-STARTPTS,fps=%d[vout]',
@@ -217,6 +234,11 @@ class VideoRenderer
             // Create ASS subtitle file
             $assFilePath = $this->createASSFile($caption, $language, $width, $height);
             $tempFiles[] = $assFilePath; // Track for cleanup
+
+            \Log::info('ASS file added to temp files tracking', [
+                'file_path' => $assFilePath,
+                'temp_files_count' => count($tempFiles)
+            ]);
 
             // Build FFmpeg filter chain: scale video, scale flyer, overlay flyer with subtitles, then trim/fps
             $filters[] = sprintf(
@@ -383,9 +405,23 @@ class VideoRenderer
         $tempDir = storage_path('app/temp');
         if (!is_dir($tempDir)) {
             mkdir($tempDir, 0755, true);
+            \Log::info('Created temp directory', ['path' => $tempDir]);
         }
         $assFilePath = $tempDir . '/' . Str::random(16) . '.ass';
-        file_put_contents($assFilePath, $assContent);
+
+        // Write ASS content to file
+        $writeResult = file_put_contents($assFilePath, $assContent);
+        if ($writeResult === false) {
+            throw new \Exception('Failed to write ASS file: ' . $assFilePath);
+        }
+
+        \Log::info('ASS file created successfully', [
+            'file_path' => $assFilePath,
+            'file_size' => filesize($assFilePath),
+            'content_length' => strlen($assContent),
+            'temp_dir_exists' => is_dir($tempDir),
+            'temp_dir_writable' => is_writable($tempDir)
+        ]);
 
         return $assFilePath;
     }
