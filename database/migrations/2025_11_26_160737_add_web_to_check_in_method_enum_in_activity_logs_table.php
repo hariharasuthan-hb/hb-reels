@@ -12,14 +12,22 @@ return new class extends Migration
      */
     public function up(): void
     {
-        // For SQLite, we need to recreate the column with new enum values
-        Schema::table('activity_logs', function (Blueprint $table) {
-            $table->dropColumn('check_in_method');
-        });
+        // Check database connection type and handle accordingly
+        $connection = config('database.default');
 
-        Schema::table('activity_logs', function (Blueprint $table) {
-            $table->enum('check_in_method', ['qr_code', 'rfid', 'manual', 'web'])->nullable();
-        });
+        if ($connection === 'sqlite') {
+            // For SQLite, recreate the column
+            Schema::table('activity_logs', function (Blueprint $table) {
+                $table->dropColumn('check_in_method');
+            });
+
+            Schema::table('activity_logs', function (Blueprint $table) {
+                $table->enum('check_in_method', ['qr_code', 'rfid', 'manual', 'web'])->nullable();
+            });
+        } else {
+            // For MySQL and other databases, use ALTER TABLE
+            DB::statement("ALTER TABLE activity_logs MODIFY COLUMN check_in_method ENUM('qr_code', 'rfid', 'manual', 'web') NULL");
+        }
     }
 
     /**
@@ -27,13 +35,21 @@ return new class extends Migration
      */
     public function down(): void
     {
-        // Revert back to the original enum
-        Schema::table('activity_logs', function (Blueprint $table) {
-            $table->dropColumn('check_in_method');
-        });
+        // Check database connection type and handle accordingly
+        $connection = config('database.default');
 
-        Schema::table('activity_logs', function (Blueprint $table) {
-            $table->enum('check_in_method', ['qr_code', 'rfid', 'manual'])->nullable();
-        });
+        if ($connection === 'sqlite') {
+            // For SQLite, recreate the column
+            Schema::table('activity_logs', function (Blueprint $table) {
+                $table->dropColumn('check_in_method');
+            });
+
+            Schema::table('activity_logs', function (Blueprint $table) {
+                $table->enum('check_in_method', ['qr_code', 'rfid', 'manual'])->nullable();
+            });
+        } else {
+            // For MySQL and other databases, use ALTER TABLE
+            DB::statement("ALTER TABLE activity_logs MODIFY COLUMN check_in_method ENUM('qr_code', 'rfid', 'manual') NULL");
+        }
     }
 };
