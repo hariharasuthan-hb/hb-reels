@@ -320,16 +320,6 @@ class VideoRenderer
             'has_mp4_extension' => preg_match('/\.mp4$/i', $outputPath) ? 'YES' : 'NO'
         ]);
 
-        // Clean up temporary ASS files
-        if (!empty($tempFiles)) {
-            foreach ($tempFiles as $tempFile) {
-                if (file_exists($tempFile)) {
-                    @unlink($tempFile);
-                    \Log::info('Cleaned up temporary ASS file', ['file' => $tempFile]);
-                }
-            }
-        }
-    
         \Log::info('========== FINAL FFMPEG COMMAND ==========');
         \Log::info('FFmpeg command', [
             'command_length' => strlen($command),
