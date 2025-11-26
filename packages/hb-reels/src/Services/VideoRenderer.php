@@ -66,7 +66,7 @@ class VideoRenderer
             $caption,
             $language
         );
-
+        // dd($command);
         // Set fontconfig environment for proper Tamil shaping (force fontconfig over macOS CoreText)
         $fontDir = dirname($this->getFontForLanguage($language ?? 'en'));
         putenv("FC_CONFIG_DIR={$fontDir}");
@@ -213,8 +213,10 @@ class VideoRenderer
             foreach ($lines as $index => $line) {
                 if (empty(trim($line))) continue;
 
-                // Escape special characters for FFmpeg
-                $escapedLine = str_replace("'", "\\'", $line);
+                // Escape special characters for FFmpeg - ORDER MATTERS!
+                // Escape backslash first, then other special chars
+                $escapedLine = str_replace('\\', '\\\\', $line);
+                $escapedLine = str_replace("'", "\\'", $escapedLine);
                 $escapedLine = str_replace(':', '\\:', $escapedLine);
                 $escapedLine = str_replace('%', '%%', $escapedLine);
 
@@ -330,8 +332,10 @@ class VideoRenderer
             foreach ($lines as $index => $line) {
                 if (empty(trim($line))) continue;
 
-                // Escape special characters for FFmpeg
-                $escapedLine = str_replace("'", "\\'", $line);
+                // Escape special characters for FFmpeg - ORDER MATTERS!
+                // Escape backslash first, then other special chars
+                $escapedLine = str_replace('\\', '\\\\', $line);
+                $escapedLine = str_replace("'", "\\'", $escapedLine);
                 $escapedLine = str_replace(':', '\\:', $escapedLine);
                 $escapedLine = str_replace('%', '%%', $escapedLine);
 
