@@ -6,7 +6,7 @@
         {{-- Page Header --}}
         <div class="mb-8">
             <h1 class="text-3xl font-bold text-gray-900">My Activities</h1>
-            <p class="mt-2 text-gray-600">View your gym check-ins, check-outs, and video generation history</p>
+            <p class="mt-2 text-gray-600">View your gym check-ins, check-outs, and event reel generation history</p>
         </div>
 
         {{-- Success Message --}}
@@ -64,12 +64,12 @@
                                         </div>
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap">
-                                        @if($activity->activity_type === 'video_generation')
+                                        @if($activity->activity_type === 'event_reel_generation')
                                             <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-                                                <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 24 24">
-                                                    <path d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                                                <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/>
                                                 </svg>
-                                                Video Generation
+                                                Event Reel
                                             </span>
                                         @else
                                             <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
@@ -81,13 +81,13 @@
                                         @endif
                                     </td>
                                     <td class="px-6 py-4">
-                                        @if($activity->activity_type === 'video_generation')
+                                        @if($activity->activity_type === 'event_reel_generation')
                                             <div class="text-sm text-gray-900 font-medium">
                                                 {{ Str::limit($activity->workout_summary, 60) }}
                                             </div>
                                             @if($activity->video_caption)
                                                 <div class="text-sm text-gray-500 mt-1">
-                                                    Caption: {{ Str::limit($activity->video_caption, 40) }}
+                                                    Event Details: {{ Str::limit($activity->video_caption, 40) }}
                                                 </div>
                                             @endif
                                         @else
@@ -104,13 +104,13 @@
                                         @endif
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap">
-                                        @if($activity->activity_type === 'video_generation')
+                                        @if($activity->activity_type === 'event_reel_generation')
                                             @if($activity->video_size_bytes)
                                                 <div class="text-sm text-gray-900">
                                                     {{ number_format($activity->video_size_bytes / 1024 / 1024, 2) }} MB
                                                 </div>
                                                 <div class="text-sm text-gray-500">
-                                                    Video file
+                                                    Event reel
                                                 </div>
                                             @else
                                                 <span class="text-sm text-gray-400">-</span>
@@ -129,9 +129,9 @@
                                         @endif
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap">
-                                        @if($activity->activity_type === 'video_generation')
+                                        @if($activity->activity_type === 'event_reel_generation')
                                             <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
-                                                Web
+                                                Event Generator
                                             </span>
                                         @else
                                             <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full
@@ -144,13 +144,13 @@
                                         @endif
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                                        @if($activity->activity_type === 'video_generation' && $activity->video_filename)
+                                        @if($activity->activity_type === 'event_reel_generation' && $activity->video_filename)
                                             <a href="{{ route('member.download-video', ['filename' => $activity->video_filename]) }}"
                                                class="text-blue-600 hover:text-blue-900 inline-flex items-center">
                                                 <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
                                                 </svg>
-                                                Download
+                                                Download Reel
                                             </a>
                                         @else
                                             <span class="text-gray-400">-</span>

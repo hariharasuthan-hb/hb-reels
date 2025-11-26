@@ -113,9 +113,9 @@ class ReelController
 
             ActivityLog::create([
                 'user_id' => auth()->id(),
-                'activity_type' => 'video_generation',
+                'activity_type' => 'event_reel_generation',
                 'date' => now()->toDateString(),
-                'workout_summary' => 'Generated video reel: ' . $eventText,
+                'workout_summary' => 'Generated event reel: ' . $eventText,
                 'video_filename' => $videoFilename,
                 'video_caption' => $overlayText,
                 'video_path' => $outputPath,
