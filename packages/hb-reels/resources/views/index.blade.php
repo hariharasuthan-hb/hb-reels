@@ -95,13 +95,51 @@
                     </section>
                 </div>
 
+                {{-- Language Selection --}}
+                <div class="mb-6">
+                    <label for="language" class="block text-sm font-medium text-gray-700 mb-2">
+                        Language
+                    </label>
+                    <select
+                        id="language"
+                        name="language"
+                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                    >
+                        <option value="auto" {{ old('language', 'auto') === 'auto' ? 'selected' : '' }}>Auto Detect (Recommended)</option>
+                        <option value="en" {{ old('language', 'auto') === 'en' ? 'selected' : '' }}>English</option>
+                        <option value="ta" {{ old('language', 'auto') === 'ta' ? 'selected' : '' }}>தமிழ் (Tamil)</option>
+                        <option value="hi" {{ old('language', 'auto') === 'hi' ? 'selected' : '' }}>हिन्दी (Hindi)</option>
+                        <option value="te" {{ old('language', 'auto') === 'te' ? 'selected' : '' }}>తెలుగు (Telugu)</option>
+                        <option value="ml" {{ old('language', 'auto') === 'ml' ? 'selected' : '' }}>മലയാളം (Malayalam)</option>
+                        <option value="kn" {{ old('language', 'auto') === 'kn' ? 'selected' : '' }}>ಕನ್ನಡ (Kannada)</option>
+                        <option value="bn" {{ old('language', 'auto') === 'bn' ? 'selected' : '' }}>বাংলা (Bengali)</option>
+                        <option value="gu" {{ old('language', 'auto') === 'gu' ? 'selected' : '' }}>ગુજરાતી (Gujarati)</option>
+                        <option value="mr" {{ old('language', 'auto') === 'mr' ? 'selected' : '' }}>मराठी (Marathi)</option>
+                        <option value="pa" {{ old('language', 'auto') === 'pa' ? 'selected' : '' }}>ਪੰਜਾਬੀ (Punjabi)</option>
+                        <option value="or" {{ old('language', 'auto') === 'or' ? 'selected' : '' }}>ଓଡ଼ିଆ (Oriya)</option>
+                        <option value="ar" {{ old('language', 'auto') === 'ar' ? 'selected' : '' }}>العربية (Arabic)</option>
+                        <option value="fa" {{ old('language', 'auto') === 'fa' ? 'selected' : '' }}>فارسی (Persian)</option>
+                        <option value="ur" {{ old('language', 'auto') === 'ur' ? 'selected' : '' }}>اردو (Urdu)</option>
+                        <option value="th" {{ old('language', 'auto') === 'th' ? 'selected' : '' }}>ไทย (Thai)</option>
+                        <option value="my" {{ old('language', 'auto') === 'my' ? 'selected' : '' }}>မြန်မာ (Burmese)</option>
+                        <option value="km" {{ old('language', 'auto') === 'km' ? 'selected' : '' }}>ភាសាខ្មែរ (Khmer)</option>
+                        <option value="lo" {{ old('language', 'auto') === 'lo' ? 'selected' : '' }}>ລາວ (Lao)</option>
+                        <option value="zh" {{ old('language', 'auto') === 'zh' ? 'selected' : '' }}>中文 (Chinese)</option>
+                        <option value="ja" {{ old('language', 'auto') === 'ja' ? 'selected' : '' }}>日本語 (Japanese)</option>
+                        <option value="ko" {{ old('language', 'auto') === 'ko' ? 'selected' : '' }}>한국어 (Korean)</option>
+                        <option value="ru" {{ old('language', 'auto') === 'ru' ? 'selected' : '' }}>Русский (Russian)</option>
+                        <option value="uk" {{ old('language', 'auto') === 'uk' ? 'selected' : '' }}>Українська (Ukrainian)</option>
+                    </select>
+                    <p class="mt-1 text-xs text-gray-500">Choose the language for video captions. Auto-detect analyzes your text and selects the best language automatically.</p>
+                </div>
+
                 {{-- Show Flyer Checkbox --}}
                 <div class="mb-6">
                     <label class="flex items-center">
-                        <input 
-                            type="checkbox" 
-                            name="show_flyer" 
-                            value="1" 
+                        <input
+                            type="checkbox"
+                            name="show_flyer"
+                            value="1"
                             class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                             {{ old('show_flyer') ? 'checked' : '' }}
                         >

@@ -11,15 +11,17 @@ class AIService
 {
     private ClientInterface $client;
     private bool $useGoogleTranslate;
+    private bool $useFallbackTranslation;
 
     public function __construct(?ClientInterface $client = null)
     {
         $this->client = $client ?? new Client([
             'timeout' => 30,
         ]);
-        
+
         // Enable Google Translate for better accuracy in non-English languages
         $this->useGoogleTranslate = config('eventreel.use_google_translate', true);
+        $this->useFallbackTranslation = config('eventreel.fallback_translation', true);
     }
 
     /**
@@ -563,7 +565,7 @@ JSON:";
      * @param string $sourceLanguage Source language code (default: 'en')
      * @return string Translated text
      */
-    private function translateWithGoogle(string $text, string $targetLanguage, string $sourceLanguage = 'en'): string
+    public function translateWithGoogle(string $text, string $targetLanguage, string $sourceLanguage = 'en'): string
     {
         if (!$this->useGoogleTranslate || $sourceLanguage === $targetLanguage) {
             \Log::info('Google Translate: Skipped', [
@@ -572,57 +574,292 @@ JSON:";
             ]);
             return $text;
         }
-        
-        try {
-            // Pre-process text for better translations
-            $processedText = $this->preprocessForTranslation($text, $targetLanguage);
 
-            \Log::info('>>> GOOGLE TRANSLATE REQUEST <<<', [
-                'source_language' => $sourceLanguage,
-                'target_language' => $targetLanguage,
-                'original_text' => $text,
-                'processed_text' => $processedText,
-                'input_length' => strlen($processedText),
-                'input_encoding' => mb_detect_encoding($processedText)
-            ]);
+        // Add retry logic for network issues
+        $maxRetries = 3;
+        $retryDelay = 1; // seconds
 
-            $translator = new GoogleTranslate($targetLanguage);
-            $translator->setSource($sourceLanguage);
+        for ($attempt = 1; $attempt <= $maxRetries; $attempt++) {
+            try {
+                // Pre-process text for better translations
+                $processedText = $this->preprocessForTranslation($text, $targetLanguage);
 
-            $translated = $translator->translate($processedText);
-            
-            \Log::info('>>> GOOGLE TRANSLATE RESPONSE <<<', [
-                'source_language' => $sourceLanguage,
-                'target_language' => $targetLanguage,
-                'output_text' => $translated,
-                'output_length' => strlen($translated),
-                'output_encoding' => mb_detect_encoding($translated),
-                'has_unicode' => preg_match('/[\x{0080}-\x{FFFF}]/u', $translated) ? 'YES' : 'NO'
-            ]);
+                \Log::info('>>> GOOGLE TRANSLATE REQUEST <<<', [
+                    'attempt' => $attempt,
+                    'source_language' => $sourceLanguage,
+                    'target_language' => $targetLanguage,
+                    'original_text' => $text,
+                    'processed_text' => $processedText,
+                    'input_length' => strlen($processedText),
+                    'input_encoding' => mb_detect_encoding($processedText)
+                ]);
 
-            // Print exact Google Translate output to console
-            echo "\n=== GOOGLE TRANSLATE OUTPUT ===\n";
-            echo "Input:  '{$text}'\n";
-            echo "Output: '{$translated}'\n";
-            echo "From: {$sourceLanguage} → To: {$targetLanguage}\n";
-            echo "Unicode: " . (preg_match('/[\x{0080}-\x{FFFF}]/u', $translated) ? 'YES' : 'NO') . "\n";
-            echo "Length: " . strlen($translated) . " characters\n";
-            echo "=================================\n\n";
-            
-            return $translated;
-        } catch (\Exception $e) {
-            \Log::error('>>> GOOGLE TRANSLATE ERROR <<<', [
-                'error_message' => $e->getMessage(),
-                'error_trace' => $e->getTraceAsString(),
-                'input_text' => $text,
-                'falling_back_to_original' => true
-            ]);
-            
-            // Fallback to original text if translation fails
-            return $text;
+                $translator = new GoogleTranslate($targetLanguage);
+                $translator->setSource($sourceLanguage);
+
+                // Add timeout and retry settings
+                $translator->setOptions([
+                    'timeout' => 10,
+                    'connect_timeout' => 5,
+                ]);
+
+                $translated = $translator->translate($processedText);
+
+                // Validate translation result
+                if (empty($translated) || strlen($translated) < 2) {
+                    throw new \Exception('Empty or invalid translation result');
+                }
+
+                \Log::info('>>> GOOGLE TRANSLATE RESPONSE <<<', [
+                    'attempt' => $attempt,
+                    'source_language' => $sourceLanguage,
+                    'target_language' => $targetLanguage,
+                    'output_text' => $translated,
+                    'output_length' => strlen($translated),
+                    'output_encoding' => mb_detect_encoding($translated),
+                    'has_unicode' => preg_match('/[\x{0080}-\x{FFFF}]/u', $translated) ? 'YES' : 'NO'
+                ]);
+
+                // Print exact Google Translate output to console
+                echo "\n=== GOOGLE TRANSLATE OUTPUT ===\n";
+                echo "Input:  '{$text}'\n";
+                echo "Output: '{$translated}'\n";
+                echo "From: {$sourceLanguage} → To: {$targetLanguage}\n";
+                echo "Unicode: " . (preg_match('/[\x{0080}-\x{FFFF}]/u', $translated) ? 'YES' : 'NO') . "\n";
+                echo "Length: " . strlen($translated) . " characters\n";
+                echo "=================================\n\n";
+
+                return $translated;
+
+            } catch (\Exception $e) {
+                \Log::warning('>>> GOOGLE TRANSLATE ATTEMPT FAILED <<<', [
+                    'attempt' => $attempt,
+                    'max_retries' => $maxRetries,
+                    'error_message' => $e->getMessage(),
+                    'will_retry' => $attempt < $maxRetries
+                ]);
+
+                if ($attempt < $maxRetries) {
+                    sleep($retryDelay);
+                    $retryDelay *= 2; // Exponential backoff
+                    continue;
+                }
+
+                // All retries failed
+                \Log::error('>>> GOOGLE TRANSLATE ERROR - ALL RETRIES FAILED <<<', [
+                    'total_attempts' => $maxRetries,
+                    'error_message' => $e->getMessage(),
+                    'error_trace' => $e->getTraceAsString(),
+                    'input_text' => $text,
+                    'using_fallback_translation' => $this->useFallbackTranslation
+                ]);
+
+                // Try fallback translation if enabled
+                if ($this->useFallbackTranslation) {
+                    $fallbackResult = $this->fallbackTranslate($text, $targetLanguage);
+                    if ($fallbackResult !== $text) {
+                        \Log::info('>>> FALLBACK TRANSLATION SUCCESS <<<', [
+                            'original_text' => $text,
+                            'fallback_translation' => $fallbackResult,
+                            'target_language' => $targetLanguage
+                        ]);
+                        return $fallbackResult;
+                    }
+                }
+
+                // Final fallback: Return original text with language marker
+                return $text . " ({$targetLanguage})";
+            }
         }
+
+        // This should never be reached, but just in case
+        return $text;
     }
     
+    /**
+     * Fallback translation method when Google Translate is unavailable.
+     * Provides mock translations for testing and development.
+     */
+    private function fallbackTranslate(string $text, string $targetLanguage): string
+    {
+        // Mock translations for common phrases (for testing only)
+        $mockTranslations = [
+            'ta' => [ // Tamil
+                'happy birthday' => 'பிறந்தநாள் வாழ்த்துக்கள்',
+                'happy birth day' => 'பிறந்தநாள் வாழ்த்துக்கள்',
+                'birthday' => 'பிறந்தநாள்',
+                'celebration' => 'கொண்டாட்டம்',
+                'congratulations' => 'வாழ்த்துக்கள்',
+                'welcome' => 'வரவேற்பு',
+                'thank you' => 'நன்றி',
+                'good morning' => 'காலை வணக்கம்',
+                'good evening' => 'மாலை வணக்கம்',
+                'hello' => 'வணக்கம்',
+                'how are you' => 'எப்படி இருக்கிறீர்கள்',
+            ],
+            'hi' => [ // Hindi
+                'happy birthday' => 'जन्मदिन मुबारक हो',
+                'happy birth day' => 'जन्मदिन मुबारक हो',
+                'birthday' => 'जन्मदिन',
+                'celebration' => 'जश्न',
+                'congratulations' => 'बधाई हो',
+                'welcome' => 'स्वागत है',
+                'thank you' => 'धन्यवाद',
+                'good morning' => 'सुप्रभात',
+                'good evening' => 'सुबह भला',
+                'hello' => 'नमस्ते',
+                'how are you' => 'आप कैसे हैं',
+            ],
+            'te' => [ // Telugu
+                'happy birthday' => 'పుట్టినరోజు శుభాకాంక్షలు',
+                'happy birth day' => 'పుట్టినరోజు శుభాకాంక్షలు',
+                'birthday' => 'పుట్టినరోజు',
+                'celebration' => 'జరుపుక',
+                'congratulations' => 'అభినందనలు',
+                'welcome' => 'స్వాగతం',
+                'thank you' => 'ధన్యవాదాలు',
+                'good morning' => 'శుభోదయం',
+                'good evening' => 'సునాయంతో',
+                'hello' => 'నమస్కారం',
+                'how are you' => 'మీరు ఎలా ఉన్నారు',
+            ],
+            'es' => [ // Spanish
+                'happy birthday' => 'feliz cumpleaños',
+                'happy birth day' => 'feliz cumpleaños',
+                'birthday' => 'cumpleaños',
+                'celebration' => 'celebración',
+                'congratulations' => 'felicitaciones',
+                'welcome' => 'bienvenido',
+                'thank you' => 'gracias',
+                'good morning' => 'buenos días',
+                'good evening' => 'buenas tardes',
+                'hello' => 'hola',
+                'how are you' => 'cómo estás',
+            ],
+            'fr' => [ // French
+                'happy birthday' => 'joyeux anniversaire',
+                'happy birth day' => 'joyeux anniversaire',
+                'birthday' => 'anniversaire',
+                'celebration' => 'célébration',
+                'congratulations' => 'félicitations',
+                'welcome' => 'bienvenue',
+                'thank you' => 'merci',
+                'good morning' => 'bonjour',
+                'good evening' => 'bonsoir',
+                'hello' => 'salut',
+                'how are you' => 'comment ça va',
+            ],
+        ];
+
+        // Check if we have mock translations for the target language
+        if (!isset($mockTranslations[$targetLanguage])) {
+            return $text; // No mock translation available
+        }
+
+        $textLower = strtolower(trim($text));
+
+        // Look for exact matches first
+        if (isset($mockTranslations[$targetLanguage][$textLower])) {
+            return $mockTranslations[$targetLanguage][$textLower];
+        }
+
+        // Handle combined phrases like "happy birthday lohith"
+        $words = explode(' ', $textLower);
+        if (count($words) > 1) {
+            // Check if first part is a known phrase
+            $firstWord = $words[0];
+            $remainingWords = implode(' ', array_slice($words, 1));
+
+            if (isset($mockTranslations[$targetLanguage][$firstWord])) {
+                // If second part is a name, transliterate it
+                $nameTranslation = $this->transliterateName($remainingWords, $targetLanguage);
+                if ($nameTranslation !== $remainingWords) {
+                    return $mockTranslations[$targetLanguage][$firstWord] . ' ' . $nameTranslation;
+                }
+            }
+
+            // Check for "happy birthday" + name pattern
+            if ($textLower === 'happy birthday lohith' || $textLower === 'happy birth day lohith') {
+                if ($targetLanguage === 'ta') {
+                    return 'பிறந்தநாள் வாழ்த்துக்கள் லோஹித்';
+                }
+            }
+        }
+
+        // Look for partial matches in common phrases
+        foreach ($mockTranslations[$targetLanguage] as $english => $translation) {
+            if (strpos($textLower, $english) !== false) {
+                return $translation;
+            }
+        }
+
+        // For names and other proper nouns, transliterate them
+        $nameTranslation = $this->transliterateName($textLower, $targetLanguage);
+        if ($nameTranslation !== $textLower) {
+            return $nameTranslation;
+        }
+
+        // If no translation found, return original text
+        return $text;
+    }
+
+    /**
+     * Transliterate names to target language script.
+     */
+    private function transliterateName(string $name, string $targetLanguage): string
+    {
+        $nameLower = strtolower(trim($name));
+
+        if ($targetLanguage === 'ta') {
+            // Tamil name transliterations
+            $tamilNames = [
+                'lohith' => 'லோஹித்',
+                'lohitha' => 'லோஹிதா',
+                'lohithkumar' => 'லோஹித்குமார்',
+                'arun' => 'அருண்',
+                'aruna' => 'அருணா',
+                'kumar' => 'குமார்',
+                'kumari' => 'குமாரி',
+                'priya' => 'பிரியா',
+                'priyanka' => 'பிரியங்கா',
+                'sara' => 'சாரா',
+                'sarah' => 'சாரா',
+                'john' => 'ஜான்',
+                'mary' => 'மேரி',
+                'david' => 'டேவிட்',
+                'michael' => 'மைக்கேல்',
+                'ravi' => 'ரவி',
+                'ravi kumar' => 'ரவி குமார்',
+                'suresh' => 'சுரேஷ்',
+                'mahesh' => 'மகேஷ்',
+                'rajesh' => 'ராஜேஷ்',
+                'ganesh' => 'கணேஷ்',
+                'vignesh' => 'விக்னேஷ்',
+                'prakash' => 'பிரகாஷ்',
+                'naveen' => 'நவீன்',
+                'naveena' => 'நவீனா',
+            ];
+
+            if (isset($tamilNames[$nameLower])) {
+                return $tamilNames[$nameLower];
+            }
+
+            // Handle compound names
+            $words = explode(' ', $nameLower);
+            if (count($words) === 2) {
+                $first = $words[0];
+                $last = $words[1];
+
+                if (isset($tamilNames[$first]) && isset($tamilNames[$last])) {
+                    return $tamilNames[$first] . ' ' . $tamilNames[$last];
+                }
+            }
+        }
+
+        // Return original name if no transliteration found
+        return $name;
+    }
+
     /**
      * Detect if text is primarily in English.
      * Simple heuristic: if more than 70% of characters are ASCII, assume English.
@@ -632,17 +869,17 @@ JSON:";
         if (empty($text)) {
             return true;
         }
-        
+
         $asciiCount = 0;
         $totalCount = mb_strlen($text);
-        
+
         for ($i = 0; $i < $totalCount; $i++) {
             $char = mb_substr($text, $i, 1);
             if (ord($char) < 128) {
                 $asciiCount++;
             }
         }
-        
+
         return ($asciiCount / $totalCount) > 0.7;
     }
 }

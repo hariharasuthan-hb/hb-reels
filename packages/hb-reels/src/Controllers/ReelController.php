@@ -34,6 +34,7 @@ class ReelController
             'flyer_image' => 'nullable|image|mimes:jpeg,jpg,png|max:10240',
             'event_text' => 'nullable|string|max:2000',
             'show_flyer' => 'nullable|boolean',
+            'language' => 'nullable|string|in:auto,en,ta,hi,te,ml,kn,bn,gu,mr,pa,or,ar,fa,ur,th,my,km,lo,zh,ja,ko,ru,uk',
             'access_code' => 'nullable|string',
         ]);
 
@@ -51,6 +52,7 @@ class ReelController
 
             $eventText = $this->extractEventText($request, $ocrService);
             $showFlyer = $request->boolean('show_flyer', false);
+            $language = $request->input('language', 'auto');
             $flyerPath = null;
 
             if ($request->hasFile('flyer_image')) {
@@ -99,11 +101,12 @@ class ReelController
                 'displayCaption' => $displayCaption,
             ]);
             
-            // Render final video
+            // Render final video with language support
             $outputPath = $videoRenderer->render(
                 stockVideoPath: $stockVideoPath,
                 flyerPath: $displayFlyerPath,
-                caption: $displayCaption
+                caption: $displayCaption,
+                language: $language
             );
 
             // Clean up temporary files
@@ -114,10 +117,29 @@ class ReelController
                 Storage::disk(config('eventreel.storage.disk'))->delete($stockVideoPath);
             }
 
+            // Debug: Log download attempt
+            \Log::info('Video download initiated', [
+                'output_path' => $outputPath,
+                'language' => $language,
+                'file_exists' => Storage::disk(config('eventreel.storage.disk'))->exists($outputPath),
+                'file_size' => Storage::disk(config('eventreel.storage.disk'))->exists($outputPath) ?
+                    Storage::disk(config('eventreel.storage.disk'))->size($outputPath) : 0
+            ]);
+
+            // Generate safe filename for download
+            $safeFilename = 'event-reel-' . now()->format('Y-m-d-His') . '.mp4';
+
+            // Debug: Log download filename encoding
+            \Log::info('Download filename check', [
+                'original_filename' => $safeFilename,
+                'language' => $language,
+                'filename_encoding' => mb_detect_encoding($safeFilename)
+            ]);
+
             // Return download response
             return Storage::disk(config('eventreel.storage.disk'))->download(
                 $outputPath,
-                'event-reel-' . now()->format('Y-m-d-His') . '.mp4'
+                $safeFilename
             );
 
         } catch (\Exception $e) {
