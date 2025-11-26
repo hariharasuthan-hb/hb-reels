@@ -14,7 +14,7 @@ class VideoRenderer
         string $stockVideoPath,
         ?string $flyerPath = null,
         ?string $caption = null,
-        string $language = 'en'
+        string $language = 'auto'
     ): string {
         $disk = config('eventreel.storage.disk');
         $ffmpegPath = config('eventreel.ffmpeg.path', 'ffmpeg');
@@ -23,6 +23,12 @@ class VideoRenderer
         $height = config('eventreel.video.height', 1920);
         $duration = config('eventreel.video.duration', 5);
         $fps = config('eventreel.video.fps', 30);
+
+        // Auto-detect language if not specified
+        if ($language === 'auto' && $caption) {
+            $language = $this->detectLanguage($caption);
+            \Log::info('Auto-detected language', ['language' => $language, 'caption' => $caption]);
+        }
 
         // Get full paths - ensure we handle both relative and absolute paths correctly
         $diskRoot = Storage::disk($disk)->path('');
@@ -129,7 +135,7 @@ class VideoRenderer
             );
         }
     
-        // Add caption text overlay if provided
+        // Add caption text overlay if provided using ASS subtitles for proper complex script support
         \Log::info('VideoRenderer caption check', [
             'caption_provided' => $caption ? 'yes' : 'no',
             'caption_content' => $caption,
@@ -236,12 +242,10 @@ class VideoRenderer
                 }
             }
 
-            // QUICKTIME COMPATIBILITY FIX: Use drawtext instead of ASS subtitles
-            // ASS subtitles work great in VLC/MPC but QuickTime has limited subtitle support
+            // Use ASS subtitles for proper complex script rendering (Tamil, Arabic, etc.)
             $fontFile = $this->getFontForLanguage($language);
-            $currentY = $yStart;
 
-            \Log::info('Text positioning for drawtext', [
+            \Log::info('Text positioning for ASS subtitles', [
                 'line_count' => $lineCount,
                 'lines' => $lines,
                 'y_start' => $yStart,
@@ -250,73 +254,22 @@ class VideoRenderer
                 'language' => $language
             ]);
 
-            // Count non-empty lines for proper labeling
-            $nonEmptyLines = array_filter($lines, function($line) {
-                return trim($line) !== '';
-            });
-            $totalNonEmptyLines = count($nonEmptyLines);
+            // Generate ASS subtitle file
+            $assContent = $this->generateASSSubtitle($lines, $fontFile, $fontSize, $yStart, $yStep, $width, $height);
 
-            $lineIndex = 0;
-            $processedLineIndex = 0;
-            foreach ($lines as $line) {
-                // Skip empty lines
-                if (trim($line) === '') {
-                    continue;
-                }
-
-                \Log::info("Processing line {$processedLineIndex} with drawtext", ['text' => $line, 'y_position' => $currentY]);
-
-                // Escape special characters for FFmpeg
-                $safe = str_replace("'", "", $line);
-                $safe = str_replace(':', '\\:', $safe);
-
-                // Wrap long text manually (FFmpeg doesn't have auto text wrapping)
-                // Use higher limit for Unicode text (Tamil, etc.) since characters take more bytes
-                $wrapLimit = in_array($language, ['ta', 'hi', 'te', 'ml', 'kn', 'bn', 'gu', 'pa', 'or', 'mr', 'th', 'my', 'km', 'lo', 'zh', 'ja', 'ko', 'ar', 'fa', 'ur'])
-                    ? 25 // Lower limit for complex scripts
-                    : 35; // Standard limit for Latin scripts
-                $safe = $this->wrapText($safe, $wrapLimit);
-
-                // Create unique stream labels for each line to chain them properly
-                $inputLabel = $processedLineIndex === 0 ? '[v]' : "[v{$processedLineIndex}]";
-                // For the last non-empty line, output directly to [v] to connect to final processing
-                $isLastLine = $processedLineIndex === $totalNonEmptyLines - 1;
-                $outputLabel = $isLastLine ? '[v]' : "[v" . ($processedLineIndex + 1) . "]";
-
-                // Draw text with shadow and border for maximum visibility on any background
-                if ($fontFile && file_exists($fontFile)) {
-                    $filters[] = sprintf(
-                        "%sdrawtext=fontfile=%s:text='%s':fontsize=%d:fontcolor=white:" .
-                        "x=(w-text_w)/2:y=%d:" .
-                        "borderw=3:bordercolor=black:" .
-                        "shadowcolor=black@0.8:shadowx=2:shadowy=2%s",
-                        $inputLabel,
-                        escapeshellarg($fontFile),
-                        $safe,
-                        $fontSize,
-                        $currentY,
-                        $outputLabel
-                    );
-                } else {
-                    $filters[] = sprintf(
-                        "%sdrawtext=text='%s':fontsize=%d:fontcolor=white:" .
-                        "x=(w-text_w)/2:y=%d:" .
-                        "borderw=3:bordercolor=black:" .
-                        "shadowcolor=black@0.8:shadowx=2:shadowy=2%s",
-                        $inputLabel,
-                        $safe,
-                        $fontSize,
-                        $currentY,
-                        $outputLabel
-                    );
-                }
-
-                $currentY += $yStep;
-                $processedLineIndex++;
-                $lineIndex++;
+            // Create temporary ASS file
+            $tempDir = storage_path('app/temp');
+            if (!is_dir($tempDir)) {
+                mkdir($tempDir, 0755, true);
             }
+            $assFilePath = $tempDir . '/' . Str::random(16) . '.ass';
+            file_put_contents($assFilePath, $assContent);
 
-            // Final output is already connected to [v] from the last drawtext filter
+            // Add ASS subtitle filter to FFmpeg command
+            $filters[] = sprintf("ass='%s'", escapeshellarg($assFilePath));
+
+            // Track temp file for cleanup
+            $tempFiles[] = $assFilePath;
         }
     
         // Apply final video processing
@@ -450,6 +403,11 @@ class VideoRenderer
             'NotoSansTelugu-Regular.ttf' => 'Noto Sans Telugu',
             'NotoSansMalayalam-Regular.ttf' => 'Noto Sans Malayalam',
             'NotoSansKannada-Regular.ttf' => 'Noto Sans Kannada',
+            'NotoSansBengali-Regular.ttf' => 'Noto Sans Bengali',
+            'NotoSansGujarati-Regular.ttf' => 'Noto Sans Gujarati',
+            'NotoSansArabic-Regular.ttf' => 'Noto Sans Arabic',
+            'NotoSansThai-Regular.ttf' => 'Noto Sans Thai',
+            'NotoSansCJK-Regular.ttc' => 'Noto Sans CJK JP',
             'NotoSans-Regular.ttf' => 'Noto Sans',
         ];
         
@@ -465,7 +423,7 @@ class VideoRenderer
     
     /**
      * Get appropriate font file for the specified language.
-     * Returns path to Noto Sans font that supports the language's script.
+     * Prioritizes package fonts over system fonts for consistent rendering.
      */
     private function getFontForLanguage(string $language): ?string
     {
@@ -474,160 +432,196 @@ class VideoRenderer
         if ($customFont && file_exists($customFont)) {
             return $customFont;
         }
-        
+
+        // PRIORITY 1: Package fonts (guaranteed to be correct Noto fonts)
+        $packageFonts = $this->getPackageFontForLanguage($language);
+        if ($packageFonts) {
+            return $packageFonts;
+        }
+
+        // PRIORITY 2: System fonts (fallback)
+        $systemFont = $this->getSystemFontForLanguage($language);
+        if ($systemFont) {
+            return $systemFont;
+        }
+
+        // PRIORITY 3: System default fonts
+        $fallbackFonts = [
+            '/System/Library/Fonts/Supplemental/Arial.ttf',  // macOS
+            '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',  // Linux
+            'C:\\Windows\\Fonts\\arial.ttf',  // Windows
+        ];
+
+        foreach ($fallbackFonts as $font) {
+            if (file_exists($font)) {
+                \Log::warning('Using system fallback font (may not support all characters)', [
+                    'language' => $language,
+                    'fallback_font' => $font
+                ]);
+                return $font;
+            }
+        }
+
+        \Log::error('No suitable font found for language', ['language' => $language]);
+        return null;
+    }
+
+    /**
+     * Get font from package resources (highest priority).
+     */
+    private function getPackageFontForLanguage(string $language): ?string
+    {
+        // Map languages to package font files
+        $packageFontMap = [
+            'ta' => __DIR__ . '/../../resources/fonts/noto-sans-indic/NotoSansTamil-Regular.ttf',
+            'hi' => __DIR__ . '/../../resources/fonts/noto-sans-indic/NotoSansDevanagari-Regular.ttf',
+            'te' => __DIR__ . '/../../resources/fonts/noto-sans-indic/NotoSansTelugu-Regular.ttf',
+            'ml' => __DIR__ . '/../../resources/fonts/noto-sans-indic/NotoSansMalayalam-Regular.ttf',
+            'kn' => __DIR__ . '/../../resources/fonts/noto-sans-indic/NotoSansKannada-Regular.ttf',
+            'bn' => __DIR__ . '/../../resources/fonts/noto-sans-indic/NotoSansBengali-Regular.ttf',
+            'gu' => __DIR__ . '/../../resources/fonts/noto-sans-indic/NotoSansGujarati-Regular.ttf',
+            'mr' => __DIR__ . '/../../resources/fonts/noto-sans-indic/NotoSansDevanagari-Regular.ttf',
+            'ar' => __DIR__ . '/../../resources/fonts/noto-sans-arabic/NotoSansArabic-Regular.ttf',
+            'fa' => __DIR__ . '/../../resources/fonts/noto-sans-arabic/NotoSansArabic-Regular.ttf',
+            'ur' => __DIR__ . '/../../resources/fonts/noto-sans-arabic/NotoSansArabic-Regular.ttf',
+            'th' => __DIR__ . '/../../resources/fonts/noto-sans-thai/NotoSansThai-Regular.ttf',
+            'zh' => __DIR__ . '/../../resources/fonts/noto-sans-cjk/NotoSansCJK-Regular.ttc',
+            'ja' => __DIR__ . '/../../resources/fonts/noto-sans-cjk/NotoSansCJK-Regular.ttc',
+            'ko' => __DIR__ . '/../../resources/fonts/noto-sans-cjk/NotoSansCJK-Regular.ttc',
+        ];
+
+        $fontPath = $packageFontMap[$language] ?? null;
+
+        if ($fontPath && file_exists($fontPath)) {
+            \Log::info('Using package font', [
+                'language' => $language,
+                'font_path' => $fontPath
+            ]);
+            return $fontPath;
+        }
+
+        return null;
+    }
+
+    /**
+     * Get font from system directories (fallback).
+     */
+    private function getSystemFontForLanguage(string $language): ?string
+    {
         // Map languages to their required fonts
-        // Uniform approach: All languages use Regular weight for consistency
-        // ALL complex script languages use ASS subtitles with HarfBuzz shaping via libass
         $fontMap = [
-            // Indic languages (complex ligatures - need HarfBuzz shaping)
-            'hi' => 'NotoSansDevanagari-Regular',  // Hindi (Devanagari script)
-            'ta' => 'NotoSansTamil-Regular',       // Tamil
-            'te' => 'NotoSansTelugu-Regular',      // Telugu
-            'ml' => 'NotoSansMalayalam-Regular',   // Malayalam
-            'kn' => 'NotoSansKannada-Regular',     // Kannada
-            'bn' => 'NotoSansBengali-Regular',     // Bengali (Bangla)
-            'gu' => 'NotoSansGujarati-Regular',    // Gujarati
-            'pa' => 'NotoSansGurmukhi-Regular',    // Punjabi (Gurmukhi script)
-            'or' => 'NotoSansOriya-Regular',       // Oriya (Odia)
-            'mr' => 'NotoSansDevanagari-Regular',  // Marathi (uses Devanagari)
-            
-            // Southeast Asian languages (complex scripts)
-            'th' => 'NotoSansThai-Regular',        // Thai
-            'my' => 'NotoSansMyanmar-Regular',     // Burmese (Myanmar)
-            'km' => 'NotoSansKhmer-Regular',       // Khmer (Cambodian)
-            'lo' => 'NotoSansLao-Regular',         // Lao
-            
-            // East Asian languages (all use the same CJK font file)
-            'zh' => 'NotoSansCJK',                 // Chinese (Simplified)
-            'ja' => 'NotoSansCJK',                 // Japanese
-            'ko' => 'NotoSansCJK',                 // Korean
-            
-            // Arabic and related scripts (RTL languages)
-            'ar' => 'Noto Sans Arabic',            // Arabic
-            'fa' => 'Noto Sans Arabic',            // Persian (Farsi)
-            'ur' => 'Noto Sans Arabic',            // Urdu
-            
+            // Indic languages
+            'hi' => 'NotoSansDevanagari-Regular',
+            'ta' => 'NotoSansTamil-Regular',
+            'te' => 'NotoSansTelugu-Regular',
+            'ml' => 'NotoSansMalayalam-Regular',
+            'kn' => 'NotoSansKannada-Regular',
+            'bn' => 'NotoSansBengali-Regular',
+            'gu' => 'NotoSansGujarati-Regular',
+            'pa' => 'NotoSansGurmukhi-Regular',
+            'or' => 'NotoSansOriya-Regular',
+            'mr' => 'NotoSansDevanagari-Regular',
+
+            // Southeast Asian languages
+            'th' => 'NotoSansThai-Regular',
+            'my' => 'NotoSansMyanmar-Regular',
+            'km' => 'NotoSansKhmer-Regular',
+            'lo' => 'NotoSansLao-Regular',
+
+            // East Asian languages
+            'zh' => 'NotoSansCJK',
+            'ja' => 'NotoSansCJK',
+            'ko' => 'NotoSansCJK',
+
+            // Arabic and related scripts
+            'ar' => 'Noto Sans Arabic',
+            'fa' => 'Noto Sans Arabic',
+            'ur' => 'Noto Sans Arabic',
+
             // Cyrillic
-            'ru' => 'Noto Sans',                   // Russian
-            'uk' => 'Noto Sans',                   // Ukrainian
-            
-            // Default for Western languages (English, Spanish, French, German, Italian, Portuguese, etc.)
+            'ru' => 'Noto Sans',
+            'uk' => 'Noto Sans',
+
+            // Default
             'default' => 'Noto Sans'
         ];
-        
-        // Get font name for language
+
         $fontName = $fontMap[$language] ?? $fontMap['default'];
-        
+
         // Get home directory safely
         $homeDir = getenv('HOME') ?: (getenv('USERPROFILE') ?: '/Users/' . get_current_user());
-        
-        // Platform-specific font search paths
+
+        // System font search paths
         $searchPaths = [
             // macOS
             $homeDir . '/Library/Fonts/',
             '/Library/Fonts/',
             '/System/Library/Fonts/',
             '/System/Library/Fonts/Supplemental/',
-            
+
             // Linux
             '/usr/share/fonts/',
             '/usr/share/fonts/truetype/',
             '/usr/share/fonts/truetype/noto/',
             '/usr/local/share/fonts/',
             $homeDir . '/.fonts/',
-            
+
             // Windows
             'C:/Windows/Fonts/',
-            
-            // Custom storage
-            storage_path('fonts/'),
         ];
-        
-        // Try to find the font file
-        // Collect all matching fonts with priority: exact match > bold > regular > medium
-        $foundFonts = [
-            'exact' => null,     // Exact filename match (highest priority)
-            'bold' => null,      // Bold weight (for ta language)
-            'regular' => null,   // Regular weight
-            'medium' => null,    // Medium weight (fallback)
-        ];
-        
+
         foreach ($searchPaths as $path) {
             if (!is_dir($path)) {
                 continue;
             }
-            
+
             try {
-                // Search for font files recursively
                 $iterator = new \RecursiveIteratorIterator(
                     new \RecursiveDirectoryIterator($path, \RecursiveDirectoryIterator::SKIP_DOTS),
                     \RecursiveIteratorIterator::SELF_FIRST
                 );
-                
+
                 foreach ($iterator as $file) {
                     if (!$file->isFile()) {
                         continue;
                     }
-                    
+
                     $filename = $file->getFilename();
                     $extension = strtolower($file->getExtension());
-                    
-                    // Check if this is a font file
+
                     if (!in_array($extension, ['ttf', 'otf', 'ttc'])) {
                         continue;
                     }
-                    
-                    // First try exact match (for specific font names like "NotoSansTamil-Regular")
+
                     $fileBaseName = pathinfo($filename, PATHINFO_FILENAME);
+
+                    // Check for exact or fuzzy match
                     $exactMatch = ($fileBaseName === $fontName);
-                    
-                    // Then try fuzzy match (case-insensitive, ignoring spaces/dashes)
                     $searchName = str_replace([' ', '-', '_'], '', strtolower($fontName));
                     $fileBaseNameNormalized = str_replace([' ', '-', '_'], '', strtolower($fileBaseName));
                     $fuzzyMatch = (strpos($fileBaseNameNormalized, $searchName) !== false);
-                    
+
                     if ($exactMatch || $fuzzyMatch) {
-                        
-                        // STRICTLY reject Condensed/ExtraCondensed/SemiCondensed fonts
+                        // Skip condensed fonts
                         if (stripos($filename, 'Condensed') !== false ||
                             stripos($filename, 'Cond') !== false ||
                             stripos($filename, 'ExtCond') !== false ||
                             stripos($filename, 'SemCond') !== false) {
-                            continue; // Skip condensed fonts
+                            continue;
                         }
-                        
-                        // Collect fonts by priority
-                        
-                        // 1. Exact match (highest priority)
-                        if ($exactMatch && !$foundFonts['exact']) {
-                            $foundFonts['exact'] = $file->getPathname();
-                        }
-                        
-                        // 2. Bold fonts (for Tamil video clarity)
-                        if (stripos($filename, 'Bold') !== false &&
-                            !stripos($filename, 'ExtraBold') &&  // Skip ExtraBold
-                            !stripos($filename, 'SemiBold') &&   // Skip SemiBold
-                            !$foundFonts['bold']) {
-                            $foundFonts['bold'] = $file->getPathname();
-                        }
-                        
-                        // 3. Regular fonts
-                        if (stripos($filename, 'Regular') !== false && !$foundFonts['regular']) {
-                            $foundFonts['regular'] = $file->getPathname();
-                        }
-                        
-                        // 4. Medium fonts as fallback
-                        if (stripos($filename, 'Medium') !== false &&
-                            !stripos($filename, 'Bold') &&
-                            !stripos($filename, 'Light') &&
-                            !stripos($filename, 'Thin') &&
-                            !$foundFonts['medium']) {
-                            $foundFonts['medium'] = $file->getPathname();
+
+                        // Prefer Regular fonts
+                        if (stripos($filename, 'Regular') !== false) {
+                            \Log::info('Using system Regular font', [
+                                'language' => $language,
+                                'font_name' => $fontName,
+                                'font_path' => $file->getPathname()
+                            ]);
+                            return $file->getPathname();
                         }
                     }
                 }
             } catch (\Exception $e) {
-                // Skip paths that cause errors (permission denied, etc.)
                 \Log::debug('Skipping font search path', [
                     'path' => $path,
                     'error' => $e->getMessage()
@@ -635,69 +629,107 @@ class VideoRenderer
                 continue;
             }
         }
-        
-        // Uniform font priority for all languages: Exact > Regular > Medium > Bold
-        // This ensures consistent behavior across all languages
-        
-        // 1. Exact match (highest priority)
-        if ($foundFonts['exact']) {
-            \Log::info('Found EXACT MATCH font', [
-                'language' => $language,
-                'font_name' => $fontName,
-                'font_path' => $foundFonts['exact']
-            ]);
-            return $foundFonts['exact'];
+
+        return null;
+    }
+
+    /**
+     * Auto-detect language from text content using Unicode script ranges.
+     */
+    private function detectLanguage(string $text): string
+    {
+        // Remove newlines and extra spaces for cleaner detection
+        $text = trim(preg_replace('/\s+/', ' ', $text));
+
+        if (empty($text)) {
+            return 'en';
         }
-        
-        // 2. Regular font (preferred for all languages)
-        if ($foundFonts['regular']) {
-            \Log::info('Found REGULAR font', [
-                'language' => $language,
-                'font_name' => $fontName,
-                'font_path' => $foundFonts['regular']
-            ]);
-            return $foundFonts['regular'];
-        }
-        
-        // 3. Medium font (fallback)
-        if ($foundFonts['medium']) {
-            \Log::info('Found MEDIUM font', [
-                'language' => $language,
-                'font_name' => $fontName,
-                'font_path' => $foundFonts['medium']
-            ]);
-            return $foundFonts['medium'];
-        }
-        
-        // 4. Bold font (last resort fallback)
-        if ($foundFonts['bold']) {
-            \Log::info('Found BOLD font (fallback)', [
-                'language' => $language,
-                'font_name' => $fontName,
-                'font_path' => $foundFonts['bold']
-            ]);
-            return $foundFonts['bold'];
-        }
-        
-        // Fallback to system default fonts
-        $fallbackFonts = [
-            '/System/Library/Fonts/Supplemental/Arial.ttf',  // macOS
-            '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',  // Linux
-            'C:\\Windows\\Fonts\\arial.ttf',  // Windows
+
+        // Count characters in different Unicode script ranges
+        $scriptCounts = [
+            'tamil' => 0,      // Tamil script (0B80-0BFF)
+            'devanagari' => 0, // Hindi, Marathi, Sanskrit (0900-097F)
+            'telugu' => 0,     // Telugu (0C00-0C7F)
+            'malayalam' => 0,  // Malayalam (0D00-0D7F)
+            'kannada' => 0,    // Kannada (0C80-0CFF)
+            'bengali' => 0,    // Bengali (0980-09FF)
+            'gujarati' => 0,   // Gujarati (0A80-0AFF)
+            'arabic' => 0,     // Arabic, Persian, Urdu (0600-06FF)
+            'thai' => 0,       // Thai (0E00-0E7F)
+            'cjk' => 0,        // Chinese, Japanese, Korean (4E00-9FFF, 3040-309F, 30A0-30FF, etc.)
+            'latin' => 0,      // Latin script (0041-005A, 0061-007A)
         ];
-        
-        foreach ($fallbackFonts as $font) {
-            if (file_exists($font)) {
-                \Log::warning('Using fallback font (may not support all characters)', [
-                    'language' => $language,
-                    'fallback_font' => $font
-                ]);
-                return $font;
+
+        $chars = preg_split('//u', $text, -1, PREG_SPLIT_NO_EMPTY);
+
+        foreach ($chars as $char) {
+            $code = mb_ord($char, 'UTF-8');
+
+            if ($code >= 0x0B80 && $code <= 0x0BFF) {
+                $scriptCounts['tamil']++;
+            } elseif ($code >= 0x0900 && $code <= 0x097F) {
+                $scriptCounts['devanagari']++;
+            } elseif ($code >= 0x0C00 && $code <= 0x0C7F) {
+                $scriptCounts['telugu']++;
+            } elseif ($code >= 0x0D00 && $code <= 0x0D7F) {
+                $scriptCounts['malayalam']++;
+            } elseif ($code >= 0x0C80 && $code <= 0x0CFF) {
+                $scriptCounts['kannada']++;
+            } elseif ($code >= 0x0980 && $code <= 0x09FF) {
+                $scriptCounts['bengali']++;
+            } elseif ($code >= 0x0A80 && $code <= 0x0AFF) {
+                $scriptCounts['gujarati']++;
+            } elseif ($code >= 0x0600 && $code <= 0x06FF) {
+                $scriptCounts['arabic']++;
+            } elseif ($code >= 0x0E00 && $code <= 0x0E7F) {
+                $scriptCounts['thai']++;
+            } elseif (($code >= 0x4E00 && $code <= 0x9FFF) ||
+                     ($code >= 0x3040 && $code <= 0x309F) ||
+                     ($code >= 0x30A0 && $code <= 0x30FF) ||
+                     ($code >= 0xAC00 && $code <= 0xD7AF)) {
+                $scriptCounts['cjk']++;
+            } elseif (($code >= 0x0041 && $code <= 0x005A) ||
+                     ($code >= 0x0061 && $code <= 0x007A)) {
+                $scriptCounts['latin']++;
             }
         }
-        
-        \Log::error('No suitable font found for language', ['language' => $language]);
-        return null;
+
+        // Find the script with the most characters
+        $maxScript = 'latin'; // Default fallback
+        $maxCount = 0;
+
+        foreach ($scriptCounts as $script => $count) {
+            if ($count > $maxCount) {
+                $maxCount = $count;
+                $maxScript = $script;
+            }
+        }
+
+        // Map detected scripts to language codes
+        $scriptToLanguage = [
+            'tamil' => 'ta',
+            'devanagari' => 'hi', // Could be hi, mr, sa, etc. - default to hi
+            'telugu' => 'te',
+            'malayalam' => 'ml',
+            'kannada' => 'kn',
+            'bengali' => 'bn',
+            'gujarati' => 'gu',
+            'arabic' => 'ar', // Could be ar, fa, ur - default to ar
+            'thai' => 'th',
+            'cjk' => 'zh', // Could be zh, ja, ko - default to zh
+            'latin' => 'en', // Default to English for Latin script
+        ];
+
+        $detectedLanguage = $scriptToLanguage[$maxScript] ?? 'en';
+
+        \Log::info('Language detection result', [
+            'text' => $text,
+            'script_counts' => $scriptCounts,
+            'detected_script' => $maxScript,
+            'language' => $detectedLanguage
+        ]);
+
+        return $detectedLanguage;
     }
 
     /**

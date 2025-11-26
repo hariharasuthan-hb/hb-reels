@@ -6,6 +6,7 @@
         "build": "vite build",
         "dev": "concurrently -n \"vite,server,ngrok\" -c \"yellow,green,blue\" \"vite\" \"php artisan serve\" \"start-ngrok.bat\"",
         "serve": "php artisan serve",
+        "ai:serve": "ollama serve",
         "serve:all": "concurrently -n \"ollama,server\" -c \"magenta,green\" \"ollama serve\" \"php artisan serve\"",
         "ollama": "ollama serve",
         "ngrok": "ngrok http 8000",
