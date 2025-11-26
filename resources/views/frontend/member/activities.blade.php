@@ -6,7 +6,7 @@
         {{-- Page Header --}}
         <div class="mb-8">
             <h1 class="text-3xl font-bold text-gray-900">My Activities</h1>
-            <p class="mt-2 text-gray-600">View your check-in and check-out history</p>
+            <p class="mt-2 text-gray-600">View your check-in/check-out history and generated videos</p>
         </div>
 
         {{-- Success Message --}}
@@ -129,6 +129,47 @@
                 </div>
             @endif
         </div>
+
+        {{-- Generated Videos --}}
+        @if($videos->count() > 0)
+        <div class="bg-white rounded-lg shadow-lg overflow-hidden mb-8">
+            <div class="px-6 py-4 border-b border-gray-200">
+                <h2 class="text-xl font-semibold text-gray-900">Generated Videos</h2>
+                <p class="text-sm text-gray-600 mt-1">Videos you have created using the reel generator</p>
+            </div>
+
+            <div class="divide-y divide-gray-200">
+                @foreach($videos as $video)
+                <div class="px-6 py-4 hover:bg-gray-50 transition-colors">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center space-x-4">
+                            <div class="flex-shrink-0">
+                                <svg class="w-10 h-10 text-red-500" fill="currentColor" viewBox="0 0 24 24">
+                                    <path d="M2 6H0v5h.01L0 20c0 1.1.89 2 2 2h17c.53 0 1.04-.21 1.41-.59.78-.78.78-2.05 0-2.83L13.84 6H2zm0 5h14.68l1.47 1.47c.39.39.39 1.02 0 1.41-.2.2-.45.3-.71.3H2V11zm11.5-5l-1.5-1.5L13.5 2l.5.5 1.5 1.5L13.5 6z"/>
+                                </svg>
+                            </div>
+                            <div>
+                                <h3 class="text-sm font-medium text-gray-900">{{ $video['filename'] }}</h3>
+                                <p class="text-sm text-gray-500">
+                                    Generated {{ $video['created_at_relative'] }} • {{ $video['size'] }}
+                                </p>
+                            </div>
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <a href="{{ $video['url'] }}"
+                               class="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                                </svg>
+                                Download
+                            </a>
+                        </div>
+                    </div>
+                </div>
+                @endforeach
+            </div>
+        </div>
+        @endif
     </div>
 </div>
 @endsection

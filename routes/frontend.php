@@ -39,6 +39,7 @@ Route::prefix('member')->name('member.')->middleware(['auth', 'role:member'])->g
     Route::get('/activities', [\App\Http\Controllers\Frontend\MemberController::class, 'activities'])->name('activities');
     Route::post('/check-in', [\App\Http\Controllers\Frontend\MemberController::class, 'checkIn'])->name('check-in');
     Route::post('/check-out', [\App\Http\Controllers\Frontend\MemberController::class, 'checkOut'])->name('check-out');
+    Route::get('/download-video/{filename}', [\App\Http\Controllers\Frontend\MemberController::class, 'downloadVideo'])->name('download-video');
     // Subscription routes
             Route::prefix('subscription')->name('subscription.')->group(function () {
                 Route::get('/checkout/{plan}', [\App\Http\Controllers\Member\CheckoutController::class, 'checkout'])->name('checkout');
