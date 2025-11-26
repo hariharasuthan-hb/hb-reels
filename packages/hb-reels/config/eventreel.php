@@ -22,6 +22,12 @@ return [
     |
     */
     'pexels_api_key' => env('PEXELS_API_KEY', ''),
+    'pexels' => [
+        'timeout' => env('PEXELS_TIMEOUT', 45), // API call timeout in seconds
+        'connect_timeout' => env('PEXELS_CONNECT_TIMEOUT', 10), // Connection timeout in seconds
+        'max_retries' => env('PEXELS_MAX_RETRIES', 3), // Number of retry attempts
+        'download_timeout' => env('PEXELS_DOWNLOAD_TIMEOUT', 60), // Video download timeout in seconds
+    ],
 
     /*
     |--------------------------------------------------------------------------
