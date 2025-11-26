@@ -140,6 +140,13 @@ JSON:";
         }
         
         // Step 2: If target language is not English, translate the caption
+        \Log::info('Translation check', [
+            'language_parameter' => $language,
+            'language_type' => gettype($language),
+            'is_not_english' => ($language !== 'en'),
+            'caption_before_translation' => substr($result['caption'], 0, 100)
+        ]);
+
         if ($language !== 'en') {
             \Log::info('Step 4: Preparing for Translation', [
                 'source_language' => 'en',
@@ -567,6 +574,14 @@ JSON:";
      */
     public function translateWithGoogle(string $text, string $targetLanguage, string $sourceLanguage = 'en'): string
     {
+        \Log::info('Google Translate called', [
+            'text_length' => strlen($text),
+            'target_language' => $targetLanguage,
+            'source_language' => $sourceLanguage,
+            'use_google_translate' => $this->useGoogleTranslate,
+            'same_language' => ($sourceLanguage === $targetLanguage)
+        ]);
+
         if (!$this->useGoogleTranslate || $sourceLanguage === $targetLanguage) {
             \Log::info('Google Translate: Skipped', [
                 'reason' => $sourceLanguage === $targetLanguage ? 'Same language' : 'Disabled in config',

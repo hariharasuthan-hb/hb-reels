@@ -140,7 +140,6 @@ class VideoRenderer
         $tempFiles = [];  // Track temporary text files for cleanup
         $hasCaption = !empty($caption);
         $hasFlyer = !empty($flyerPath);
-        $assFilePath = null;
 
         // Input 1: Stock video (always present)
         $inputs[] = sprintf('-i %s', escapeshellarg($stockVideoPath));
@@ -165,76 +164,105 @@ class VideoRenderer
                 $width,
                 $height
             );
+            $filters[] = sprintf(
+                '[v]trim=duration=%d,setpts=PTS-STARTPTS,fps=%d[vout]',
+                $duration,
+                $fps
+            );
         } elseif (!$hasFlyer && $hasCaption) {
             // Scenario 2: Video + Caption only
-            // Use drawtext for Tamil (most reliable for complex scripts) or ASS for other languages
+            // Use drawtext for Tamil, ASS for other languages (ASS having issues with FFmpeg 8.0.1)
             $isTamil = ($language === 'ta' || preg_match('/[\x{0B80}-\x{0BFF}]/u', $caption));
 
-            if ($isTamil) {
-                // Use drawtext for Tamil - most reliable for complex scripts
-                $fontFile = $this->getFontForLanguage($language);
+            // Use drawtext for ALL languages with appropriate fonts (like the user's FFmpeg example)
+            $fontFile = $this->getFontForLanguage($language);
 
-                // Apply word wrapping for Tamil text
+            \Log::info('Using drawtext for all languages with proper fonts', [
+                'language' => $language,
+                'caption_length' => mb_strlen($caption, 'UTF-8'),
+                'caption_preview' => substr($caption, 0, 50),
+                'font_file' => $fontFile,
+                'font_exists' => $fontFile ? file_exists($fontFile) : false
+            ]);
+
+            // Apply appropriate text wrapping based on language
+            if ($language === 'ta' || preg_match('/[\x{0B80}-\x{0BFF}]/u', $caption)) {
+                // Tamil text wrapping
                 $wrappedCaption = $this->wrapTamilText($caption);
-
-                // Debug: Log wrapped caption
-                \Log::info('Tamil text wrapping applied', [
-                    'original_length' => mb_strlen($caption, 'UTF-8'),
-                    'wrapped_lines' => count(explode("\n", $wrappedCaption)),
-                    'wrapped_preview' => substr($wrappedCaption, 0, 100)
-                ]);
-
-                // Convert wrapped lines to drawtext format (using \n)
-                $drawtextCaption = str_replace("\n", "\\n", $wrappedCaption);
-
-                // First escape newlines properly for FFmpeg
-                $escapedCaption = str_replace(["\r", "\n"], '\\n', $drawtextCaption);
-
-                // Then escape other special characters
-                $escapedCaption = str_replace("'", "\\'", $escapedCaption);
-                $escapedCaption = str_replace(':', '\\:', $escapedCaption);
-                $escapedCaption = str_replace('%', '%%', $escapedCaption);
-
-                // Adjust font size and positioning for Tamil text wrapping
-                $fontSize = 48; // Slightly smaller for Tamil characters
-                $lineCount = count(explode("\\n", $drawtextCaption));
-                $verticalPosition = $lineCount > 1 ? '(h-text_h)/2-50' : '(h-text_h)/2'; // Move up for multi-line
-
-                $filters[] = sprintf(
-                    '[0:v]scale=%d:%d:force_original_aspect_ratio=decrease,pad=%d:%d:(ow-iw)/2:(oh-ih)/2,setsar=1,drawtext=fontfile=%s:text=%s:fontsize=%d:fontcolor=white:bordercolor=black:borderw=5:x=(w-text_w)/2:y=%s[v]',
-                    $width,
-                    $height,
-                    $width,
-                    $height,
-                    escapeshellarg($fontFile),
-                    "'$escapedCaption'",
-                    $fontSize,
-                    $verticalPosition
-                );
             } else {
-                // Use ASS filter for other languages
-                \Log::info('Using ASS subtitles for non-Tamil language', [
-                    'language' => $language,
-                    'caption_length' => mb_strlen($caption, 'UTF-8'),
-                    'caption_preview' => substr($caption, 0, 50)
-                ]);
-
-                $assFilePath = $this->createASSFile($caption, $language, $width, $height);
-
-                // For non-Tamil languages, force the appropriate font
-                // Since we're in the non-Tamil branch, use NotoSans-Regular
-                $forceFont = 'NotoSans-Regular';
-
-                $filters[] = sprintf(
-                    '[0:v]scale=%d:%d:force_original_aspect_ratio=decrease,pad=%d:%d:(ow-iw)/2:(oh-ih)/2,setsar=1,ass=%s:fontsdir=%s[v]',
-                    $width,
-                    $height,
-                    $width,
-                    $height,
-                    escapeshellarg($assFilePath),
-                    escapeshellarg(storage_path('fonts'))
-                );
+                // Other languages - simple word wrapping
+                $wrappedCaption = wordwrap($caption, 35, "\n", true);
             }
+
+            // Split into individual lines and create separate drawtext filters
+            $lines = explode("\n", $wrappedCaption);
+            $lineHeight = 80; // Space between lines
+            $startY = intval($height * 0.6); // Start at 60% down the screen
+
+            // Build the initial scaling filter
+            $scaleFilter = sprintf(
+                '[0:v]scale=%d:%d:force_original_aspect_ratio=decrease,pad=%d:%d:(ow-iw)/2:(oh-ih)/2,setsar=1',
+                $width,
+                $height,
+                $width,
+                $height
+            );
+
+            // Add individual drawtext filters for each line
+            $drawtextFilters = [];
+            foreach ($lines as $index => $line) {
+                if (empty(trim($line))) continue;
+
+                // Escape special characters for FFmpeg
+                $escapedLine = str_replace("'", "\\'", $line);
+                $escapedLine = str_replace(':', '\\:', $escapedLine);
+                $escapedLine = str_replace('%', '%%', $escapedLine);
+
+                $yPosition = $startY + ($index * $lineHeight);
+
+                if ($index === 0) {
+                    // First filter starts from the scaled video
+                    $drawtextFilters[] = sprintf(
+                        '%s,drawtext=fontfile=%s:text=%s:fontsize=64:fontcolor=white:borderw=5:x=(w-text_w)/2:y=%d',
+                        $scaleFilter,
+                        escapeshellarg($fontFile),
+                        "'$escapedLine'",
+                        $yPosition
+                    );
+                } else {
+                    // Subsequent filters chain from previous
+                    $drawtextFilters[] = sprintf(
+                        'drawtext=fontfile=%s:text=%s:fontsize=64:fontcolor=white:borderw=5:x=(w-text_w)/2:y=%d',
+                        escapeshellarg($fontFile),
+                        "'$escapedLine'",
+                        $yPosition
+                    );
+                }
+            }
+
+            // Combine all drawtext filters with semicolons
+            $combinedDrawtext = implode(',', $drawtextFilters);
+
+            // Add output label
+            $drawtextFilter = $combinedDrawtext . '[v]';
+
+            // Add trim and fps processing
+            $processingFilter = sprintf(
+                '[v]trim=duration=%d,setpts=PTS-STARTPTS,fps=%d[vout]',
+                $duration,
+                $fps
+            );
+
+            \Log::info('Individual drawtext filters constructed', [
+                'language' => $language,
+                'total_lines' => count($lines),
+                'filters_combined' => $drawtextFilter,
+                'processing_filter' => $processingFilter,
+                'font_file' => $fontFile
+            ]);
+
+            $filters[] = $drawtextFilter;
+            $filters[] = $processingFilter;
         } elseif ($hasFlyer && !$hasCaption) {
             // Scenario 3: Video + Flyer (no caption)
             $filters[] = sprintf(
@@ -249,72 +277,99 @@ class VideoRenderer
                 intval($width * 0.8)
             );
             $filters[] = '[v0][flyer]overlay=(W-w)/2:(H-h)/2[v]';
+            $filters[] = sprintf(
+                '[v]trim=duration=%d,setpts=PTS-STARTPTS,fps=%d[vout]',
+                $duration,
+                $fps
+            );
         } elseif ($hasFlyer && $hasCaption) {
             // Scenario 4: Video + Flyer + Caption
-            $isTamil = ($language === 'ta' || preg_match('/[\x{0B80}-\x{0BFF}]/u', $caption));
+            // Use drawtext for ALL languages with appropriate fonts
+            $fontFile = $this->getFontForLanguage($language);
 
-            if ($isTamil) {
-                // Use drawtext for Tamil with flyer
-                $fontFile = $this->getFontForLanguage($language);
+            \Log::info('Using drawtext for all languages with flyer', [
+                'language' => $language,
+                'caption_length' => mb_strlen($caption, 'UTF-8'),
+                'caption_preview' => substr($caption, 0, 50),
+                'font_file' => $fontFile,
+                'font_exists' => $fontFile ? file_exists($fontFile) : false
+            ]);
 
-                // Apply word wrapping for Tamil text
+            // Apply appropriate text wrapping based on language
+            if ($language === 'ta' || preg_match('/[\x{0B80}-\x{0BFF}]/u', $caption)) {
+                // Tamil text wrapping
                 $wrappedCaption = $this->wrapTamilText($caption);
-
-                // Debug: Log wrapped caption
-                \Log::info('Tamil text wrapping applied', [
-                    'original_length' => mb_strlen($caption, 'UTF-8'),
-                    'wrapped_lines' => count(explode("\n", $wrappedCaption)),
-                    'wrapped_preview' => substr($wrappedCaption, 0, 100)
-                ]);
-
-                // Convert wrapped lines to drawtext format (using \n)
-                $drawtextCaption = str_replace("\n", "\\n", $wrappedCaption);
-
-                // First escape newlines properly for FFmpeg
-                $escapedCaption = str_replace(["\r", "\n"], '\\n', $drawtextCaption);
-
-                // Then escape other special characters
-                $escapedCaption = str_replace("'", "\\'", $escapedCaption);
-                $escapedCaption = str_replace(':', '\\:', $escapedCaption);
-                $escapedCaption = str_replace('%', '%%', $escapedCaption);
-
-                $filters[] = sprintf(
-                    '[0:v]scale=%d:%d:force_original_aspect_ratio=decrease,pad=%d:%d:(ow-iw)/2:(oh-ih)/2,setsar=1[v0]',
-                    $width,
-                    $height,
-                    $width,
-                    $height
-                );
-                $filters[] = sprintf(
-                    '[1:v]scale=%d:-1[flyer]',
-                    intval($width * 0.8)
-                );
-                $filters[] = sprintf(
-                    '[v0][flyer]overlay=(W-w)/2:(H-h)/2,drawtext=fontfile=%s:text=%s:fontsize=52:fontcolor=white:bordercolor=black:borderw=5:x=(w-text_w)/2:y=h-200[v]',
-                    escapeshellarg($fontFile),
-                    "'$escapedCaption'"
-                );
             } else {
-                // Use subtitles filter for other languages with flyer
-                $assFilePath = $this->createASSFile($caption, $language, $width, $height);
+                // Other languages - simple word wrapping
+                $wrappedCaption = wordwrap($caption, 35, "\n", true);
+            }
 
-                $filters[] = sprintf(
-                    '[0:v]scale=%d:%d:force_original_aspect_ratio=decrease,pad=%d:%d:(ow-iw)/2:(oh-ih)/2,setsar=1[v0]',
-                    $width,
-                    $height,
-                    $width,
-                    $height
-                );
-                $filters[] = sprintf(
-                    '[1:v]scale=%d:-1[flyer]',
-                    intval($width * 0.8)
-                );
-                $filters[] = sprintf(
-                    '[v0][flyer]overlay=(W-w)/2:(H-h)/2,ass=%s:fontsdir=%s[v]',
-                    escapeshellarg($assFilePath),
-                    escapeshellarg(storage_path('fonts'))
+            // Split into individual lines and create separate drawtext filters for flyer
+            $lines = explode("\n", $wrappedCaption);
+            $lineHeight = 80; // Space between lines
+            $startY = intval($height * 0.75); // Start lower for flyer overlay
+
+            // Build the base filters
+            $filters[] = sprintf(
+                '[0:v]scale=%d:%d:force_original_aspect_ratio=decrease,pad=%d:%d:(ow-iw)/2:(oh-ih)/2,setsar=1[v0]',
+                $width,
+                $height,
+                $width,
+                $height
+            );
+            $filters[] = sprintf(
+                '[1:v]scale=%d:-1[flyer]',
+                intval($width * 0.8)
+            );
+
+            // Start with overlay
+            $overlayFilter = '[v0][flyer]overlay=(W-w)/2:(H-h)/2';
+
+            // Add individual drawtext filters for each line after overlay
+            $drawtextFilters = [];
+            foreach ($lines as $index => $line) {
+                if (empty(trim($line))) continue;
+
+                // Escape special characters for FFmpeg
+                $escapedLine = str_replace("'", "\\'", $line);
+                $escapedLine = str_replace(':', '\\:', $escapedLine);
+                $escapedLine = str_replace('%', '%%', $escapedLine);
+
+                $yPosition = $startY + ($index * $lineHeight);
+
+                $drawtextFilters[] = sprintf(
+                    'drawtext=fontfile=%s:text=%s:fontsize=64:fontcolor=white:borderw=5:x=(w-text_w)/2:y=%d',
+                    escapeshellarg($fontFile),
+                    "'$escapedLine'",
+                    $yPosition
                 );
             }
+
+            // Combine overlay with drawtext filters
+            if (!empty($drawtextFilters)) {
+                $overlayFilter .= ',' . implode(',', $drawtextFilters);
+            }
+
+            // Add output label
+            $flyerDrawtextFilter = $overlayFilter . '[v]';
+
+            // Add trim and fps processing
+            $flyerProcessingFilter = sprintf(
+                '[v]trim=duration=%d,setpts=PTS-STARTPTS,fps=%d[vout]',
+                $duration,
+                $fps
+            );
+
+            \Log::info('Individual flyer drawtext filters constructed', [
+                'language' => $language,
+                'total_lines' => count($lines),
+                'overlay_filter' => $flyerDrawtextFilter,
+                'processing_filter' => $flyerProcessingFilter,
+                'font_file' => $fontFile
+            ]);
+
+            $filters[] = $flyerDrawtextFilter;
+            $filters[] = $flyerProcessingFilter;
         }
     
         // Log rendering scenario
@@ -329,21 +384,16 @@ class VideoRenderer
                          (($hasFlyer && !$hasCaption) ? 'video_flyer' : 'video_flyer_caption'))
         ]);
     
-        // Apply final video processing - trim, set fps, and output
-        $filters[] = sprintf(
-            '[v]trim=duration=%d,setpts=PTS-STARTPTS,fps=%d[vout]',
-            $duration,
-            $fps
-        );
+        // Note: trim and fps are now included in the filter_complex chain above
         $filterComplex = implode(';', $filters);
         // Build FFmpeg command with proper stream mapping
         // FIXED: Remove quotes around %s for filter_complex and use escapeshellarg() to prevent command parsing issues
+        // Build FFmpeg command like the user's example for multiple languages
         $command = sprintf(
-            '%s %s -filter_complex %s -map "[vout]" -map 0:a? -c:a copy -t %d -c:v libx264 -preset fast -crf 23 -pix_fmt yuv420p -movflags +faststart %s',
+            '%s -y %s -filter_complex %s -map "[vout]" -map 0:a? -c:v libx264 -preset fast -crf 18 -c:a aac -b:a 192k -pix_fmt yuv420p -movflags +faststart %s',
             escapeshellarg($ffmpegPath),
             implode(' ', $inputs),
             escapeshellarg($filterComplex),
-            $duration,
             escapeshellarg($outputPath)
         );
 
@@ -354,10 +404,7 @@ class VideoRenderer
             'has_mp4_extension' => preg_match('/\.mp4$/i', $outputPath) ? 'YES' : 'NO'
         ]);
 
-        // Clean up ASS temp file if it was created
-        if ($assFilePath) {
-            $tempFiles[] = $assFilePath;
-        }
+        // Note: No ASS temp files to clean up - using drawtext for all languages
     
         \Log::info('========== FINAL FFMPEG COMMAND ==========');
         \Log::info('FFmpeg command', [
@@ -456,7 +503,7 @@ class VideoRenderer
         ]);
 
         // Generate ASS content
-        $assContent = $this->generateASSSubtitle($lines, $fontFile, $fontSize, $yStart, $yStep, $width, $height);
+        $assContent = $this->generateASSSubtitle($lines, $fontFile, $fontSize, $yStart, $yStep, $width, $height, $language);
 
         // Create temporary ASS file
         $tempDir = storage_path('app/temp');
@@ -480,7 +527,8 @@ class VideoRenderer
         int $yStart,
         int $yStep,
         int $width,
-        int $height
+        int $height,
+        string $language = 'en'
     ): string {
         \Log::info('Creating ASS file', [
             'language' => $language,
@@ -782,12 +830,23 @@ class VideoRenderer
 
         $fontPath = $packageFontMap[$language] ?? null;
 
-        if ($fontPath && file_exists($fontPath)) {
-            \Log::info('Using package font', [
-                'language' => $language,
-                'font_path' => $fontPath
-            ]);
-            return $fontPath;
+        if ($fontPath) {
+            $absoluteFontPath = realpath($fontPath);
+            if ($absoluteFontPath && file_exists($absoluteFontPath)) {
+                \Log::info('Using package font', [
+                    'language' => $language,
+                    'font_path' => $absoluteFontPath,
+                    'font_size' => filesize($absoluteFontPath)
+                ]);
+                return $absoluteFontPath;
+            } else {
+                \Log::warning('Font file not found', [
+                    'language' => $language,
+                    'requested_path' => $fontPath,
+                    'absolute_path' => $absoluteFontPath,
+                    'file_exists' => file_exists($fontPath)
+                ]);
+            }
         }
 
         return null;

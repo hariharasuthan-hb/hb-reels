@@ -53,6 +53,12 @@ class ReelController
             $eventText = $this->extractEventText($request, $ocrService);
             $showFlyer = $request->boolean('show_flyer', false);
             $language = $request->input('language', 'auto');
+
+            \Log::info('Language parameter received', [
+                'language_from_request' => $request->input('language'),
+                'language_defaulted' => $language,
+                'all_request_data' => $request->all()
+            ]);
             $flyerPath = null;
 
             if ($request->hasFile('flyer_image')) {
@@ -60,19 +66,41 @@ class ReelController
             }
 
             // Generate AI caption and video search optimization
-            $contentAnalysis = $aiService->generateCaption($eventText);
+            \Log::info('Starting AI caption generation', [
+                'input_text' => substr($eventText, 0, 100),
+                'selected_language' => $language
+            ]);
+
+            \Log::info('About to call generateCaption', [
+                'event_text' => substr($eventText, 0, 100),
+                'language_parameter' => $language,
+                'language_type' => gettype($language)
+            ]);
+
+            $contentAnalysis = $aiService->generateCaption($eventText, $language);
             $caption = $contentAnalysis['caption'];
             $videoKeywords = $contentAnalysis['video_keywords'] ?? [];
 
+            \Log::info('Caption generated', [
+                'original_text' => substr($eventText, 0, 100),
+                'generated_caption' => substr($caption, 0, 100),
+                'language_used' => $language,
+                'translation_occurred' => ($eventText !== $caption),
+                'caption_contains_unicode' => preg_match('/[\x{0080}-\x{FFFF}]/u', $caption),
+                'caption_contains_tamil' => preg_match('/[\x{0B80}-\x{0BFF}]/u', $caption)
+            ]);
+
             \Log::info('AI Content Analysis Complete', [
                 'caption' => $caption,
+                'caption_language' => $language,
+                'caption_length' => mb_strlen($caption),
                 'video_keywords' => $videoKeywords,
                 'content_type' => $contentAnalysis['content_analysis']['type'] ?? 'unknown',
                 'tone' => $contentAnalysis['content_analysis']['tone'] ?? 'unknown'
             ]);
 
             // Extract structured details from text using AI (handles any content type)
-            $contentDetails = $aiService->extractEventDetails($eventText);
+            $contentDetails = $aiService->extractEventDetails($caption, $language);
 
             // Format overlay text from extracted details
             $overlayText = $this->formatContentOverlay($contentDetails);
