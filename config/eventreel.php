@@ -48,6 +48,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Grammar Checking Configuration
+    |--------------------------------------------------------------------------
+    |
+    | AI-powered grammar and punctuation checking for multiple languages.
+    | Supports Ollama (local) and Google Language API (cloud).
+    |
+    */
+    'grammar_enabled' => env('EVENTREEL_GRAMMAR_ENABLED', false),
+    'grammar_provider' => env('EVENTREEL_GRAMMAR_PROVIDER', 'auto'), // 'ollama', 'google', 'auto'
+    'fallback_translation' => env('EVENTREEL_FALLBACK_TRANSLATION', true),
+
+    /*
+    |--------------------------------------------------------------------------
     | Font Configuration
     |--------------------------------------------------------------------------
     |

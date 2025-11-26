@@ -6,12 +6,14 @@ use GuzzleHttp\Client;
 use GuzzleHttp\ClientInterface;
 use GuzzleHttp\Exception\GuzzleException;
 use Stichoza\GoogleTranslate\GoogleTranslate;
+use App\Services\GrammarService;
 
 class AIService
 {
     private ClientInterface $client;
     private bool $useGoogleTranslate;
     private bool $useFallbackTranslation;
+    private GrammarService $grammarService;
 
     public function __construct(?ClientInterface $client = null)
     {
@@ -22,6 +24,9 @@ class AIService
         // Enable Google Translate for better accuracy in non-English languages
         $this->useGoogleTranslate = config('eventreel.use_google_translate', true);
         $this->useFallbackTranslation = config('eventreel.fallback_translation', true);
+
+        // Initialize grammar service
+        $this->grammarService = new GrammarService();
     }
 
     /**
@@ -161,6 +166,20 @@ JSON:";
                 'translated_caption' => $result['caption'],
                 'video_keywords_unchanged' => $result['video_keywords'] // Keywords stay in English for better search
             ]);
+
+            // Step 6: Apply grammar checking if enabled
+            if ($this->grammarService->isLanguageSupported($language)) {
+                $originalCaption = $result['caption'];
+                $result['caption'] = $this->grammarService->checkGrammar($result['caption'], $language);
+
+                \Log::info('Step 6: Grammar Check Applied', [
+                    'language' => $language,
+                    'original_length' => strlen($originalCaption),
+                    'corrected_length' => strlen($result['caption']),
+                    'changes_made' => $originalCaption !== $result['caption']
+                ]);
+            }
+
             \Log::info('========== END CONTENT ANALYSIS ==========');
 
             return $result;
@@ -290,8 +309,31 @@ JSON:";
                             \Log::info('Step 5: All Lines Translated', [
                                 'translated_lines' => $translatedLines
                             ]);
+
+                            // Step 6: Apply grammar checking to each translated line if enabled
+                            if ($this->grammarService->isLanguageSupported($language)) {
+                                $grammarCheckedLines = [];
+                                foreach ($translatedLines as $lineKey => $translatedText) {
+                                    $originalText = $translatedText;
+                                    $grammarCheckedLines[$lineKey] = $this->grammarService->checkGrammar($translatedText, $language);
+
+                                    if ($originalText !== $grammarCheckedLines[$lineKey]) {
+                                        \Log::info("Grammar corrected line {$lineKey}", [
+                                            'original' => $originalText,
+                                            'corrected' => $grammarCheckedLines[$lineKey]
+                                        ]);
+                                    }
+                                }
+                                $translatedLines = $grammarCheckedLines;
+
+                                \Log::info('Step 6: Grammar Check Applied to All Lines', [
+                                    'language' => $language,
+                                    'total_lines' => count($translatedLines)
+                                ]);
+                            }
+
                             \Log::info('========== END DETAIL EXTRACTION ==========');
-                            
+
                             return $translatedLines;
                         }
                         
