@@ -66,7 +66,6 @@ class VideoRenderer
             $caption,
             $language
         );
-         // dd($command);
         // Set fontconfig environment for proper Tamil shaping (force fontconfig over macOS CoreText)
         $fontDir = dirname($this->getFontForLanguage($language ?? 'en'));
         putenv("FC_CONFIG_DIR={$fontDir}");
@@ -158,14 +157,11 @@ class VideoRenderer
         if (!$hasFlyer && !$hasCaption) {
             // Scenario 1: Video only - just scale and trim
             $filters[] = sprintf(
-                '[0:v]scale=%d:%d:force_original_aspect_ratio=decrease,pad=%d:%d:(ow-iw)/2:(oh-ih)/2,setsar=1[v]',
+                '[0:v]scale=%d:%d:force_original_aspect_ratio=decrease,pad=%d:%d:(ow-iw)/2:(oh-ih)/2,setsar=1[v];[v]trim=duration=%d,setpts=PTS-STARTPTS,fps=%d[vout]',
                 $width,
                 $height,
                 $width,
-                $height
-            );
-            $filters[] = sprintf(
-                '[v]trim=duration=%d,setpts=PTS-STARTPTS,fps=%d[vout]',
+                $height,
                 $duration,
                 $fps
             );
@@ -181,18 +177,14 @@ class VideoRenderer
             $assFilePath = $this->createASSFile($caption, $language, $width, $height);
             $tempFiles[] = $assFilePath; // Track for cleanup
 
-            // Build FFmpeg filter chain with ASS subtitles
+            // Build FFmpeg filter chain with ASS subtitles (all in one filter chain)
             $filters[] = sprintf(
-                '[0:v]scale=%d:%d:force_original_aspect_ratio=decrease,pad=%d:%d:(ow-iw)/2:(oh-ih)/2,setsar=1,subtitles=%s[v]',
+                '[0:v]scale=%d:%d:force_original_aspect_ratio=decrease,pad=%d:%d:(ow-iw)/2:(oh-ih)/2,setsar=1,subtitles=%s[v];[v]trim=duration=%d,setpts=PTS-STARTPTS,fps=%d[vout]',
                 $width,
                 $height,
                 $width,
                 $height,
-                escapeshellarg($assFilePath)
-            );
-
-            $filters[] = sprintf(
-                '[v]trim=duration=%d,setpts=PTS-STARTPTS,fps=%d[vout]',
+                escapeshellarg($assFilePath),
                 $duration,
                 $fps
             );
@@ -205,19 +197,12 @@ class VideoRenderer
         } elseif ($hasFlyer && !$hasCaption) {
             // Scenario 3: Video + Flyer (no caption)
             $filters[] = sprintf(
-                '[0:v]scale=%d:%d:force_original_aspect_ratio=decrease,pad=%d:%d:(ow-iw)/2:(oh-ih)/2,setsar=1[v0]',
+                '[0:v]scale=%d:%d:force_original_aspect_ratio=decrease,pad=%d:%d:(ow-iw)/2:(oh-ih)/2,setsar=1[v0];[1:v]scale=%d:-1[flyer];[v0][flyer]overlay=(W-w)/2:(H-h)/2[v];[v]trim=duration=%d,setpts=PTS-STARTPTS,fps=%d[vout]',
                 $width,
                 $height,
                 $width,
-                $height
-            );
-            $filters[] = sprintf(
-                '[1:v]scale=%d:-1[flyer]',
-                intval($width * 0.8)
-            );
-            $filters[] = '[v0][flyer]overlay=(W-w)/2:(H-h)/2[v]';
-            $filters[] = sprintf(
-                '[v]trim=duration=%d,setpts=PTS-STARTPTS,fps=%d[vout]',
+                $height,
+                intval($width * 0.8),
                 $duration,
                 $fps
             );
@@ -233,24 +218,15 @@ class VideoRenderer
             $assFilePath = $this->createASSFile($caption, $language, $width, $height);
             $tempFiles[] = $assFilePath; // Track for cleanup
 
-            // Build FFmpeg filter chain: scale video, scale flyer, overlay flyer, then apply subtitles
+            // Build FFmpeg filter chain: scale video, scale flyer, overlay flyer with subtitles, then trim/fps
             $filters[] = sprintf(
-                '[0:v]scale=%d:%d:force_original_aspect_ratio=decrease,pad=%d:%d:(ow-iw)/2:(oh-ih)/2,setsar=1[v0]',
+                '[0:v]scale=%d:%d:force_original_aspect_ratio=decrease,pad=%d:%d:(ow-iw)/2:(oh-ih)/2,setsar=1[v0];[1:v]scale=%d:-1[flyer];[v0][flyer]overlay=(W-w)/2:(H-h)/2,subtitles=%s[v];[v]trim=duration=%d,setpts=PTS-STARTPTS,fps=%d[vout]',
                 $width,
                 $height,
                 $width,
-                $height
-            );
-            $filters[] = sprintf(
-                '[1:v]scale=%d:-1[flyer]',
-                intval($width * 0.8)
-            );
-            $filters[] = sprintf(
-                '[v0][flyer]overlay=(W-w)/2:(H-h)/2,subtitles=%s[v]',
-                escapeshellarg($assFilePath)
-            );
-            $filters[] = sprintf(
-                '[v]trim=duration=%d,setpts=PTS-STARTPTS,fps=%d[vout]',
+                $height,
+                intval($width * 0.8),
+                escapeshellarg($assFilePath),
                 $duration,
                 $fps
             );
