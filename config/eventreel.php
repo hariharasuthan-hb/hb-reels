@@ -89,6 +89,7 @@ return [
         'fps' => 30,
         'format' => 'mp4',
         'font_path' => env('EVENTREEL_FONT_PATH', null), // Path to TTF font file for captions
+        'use_unicode_escapes' => env('EVENTREEL_USE_UNICODE_ESCAPES', false), // Use Unicode escape sequences for complex scripts
     ],
 
     /*
@@ -130,6 +131,23 @@ return [
     */
     'ffmpeg' => [
         'path' => env('FFMPEG_PATH', 'ffmpeg'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Queue Configuration
+    |--------------------------------------------------------------------------
+    |
+    | Queue settings for background processing.
+    |
+    */
+    'queue' => [
+        'video_downloads' => [
+            'queue_name' => env('VIDEO_DOWNLOAD_QUEUE', 'video-downloads'),
+            'tries' => env('VIDEO_DOWNLOAD_TRIES', 3),
+            'timeout' => env('VIDEO_DOWNLOAD_TIMEOUT', 300),
+            'retry_until_minutes' => env('VIDEO_DOWNLOAD_RETRY_UNTIL', 30),
+        ],
     ],
 
     /*

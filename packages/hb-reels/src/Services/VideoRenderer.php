@@ -427,10 +427,25 @@ class VideoRenderer
         }
         $assFilePath = $tempDir . '/' . Str::random(16) . '.ass';
 
-        // Write ASS content to file
-        $writeResult = file_put_contents($assFilePath, $assContent);
+        // Write ASS content to file with proper UTF-8 encoding
+        // Add UTF-8 BOM for better compatibility with ASS subtitle readers
+        $bom = "\xEF\xBB\xBF"; // UTF-8 BOM
+        $utf8Content = $bom . $assContent;
+
+        $writeResult = file_put_contents($assFilePath, $utf8Content, LOCK_EX);
         if ($writeResult === false) {
             throw new \Exception('Failed to write ASS file: ' . $assFilePath);
+        }
+
+        // Verify the file was written with correct encoding
+        $writtenContent = file_get_contents($assFilePath);
+        if ($writtenContent === false) {
+            throw new \Exception('Failed to verify ASS file content: ' . $assFilePath);
+        }
+
+        // Check if BOM was written correctly
+        if (substr($writtenContent, 0, 3) !== $bom) {
+            \Log::warning('UTF-8 BOM not written correctly to ASS file', ['file' => $assFilePath]);
         }
 
         \Log::info('ASS file created successfully', [
@@ -536,7 +551,19 @@ class VideoRenderer
             // ASS uses Start and End times (00:00:00.00 format)
             // Show for entire video duration
             $line = str_replace("\n", "\\N", $line);  // Escape newlines in ASS format
-            $line = $this->escapeForASS($line);       // Escape special characters for ASS
+
+            // Use Unicode escape sequences for complex scripts if enabled
+            $useUnicodeEscapes = config('eventreel.video.use_unicode_escapes', false);
+
+            if ($useUnicodeEscapes && $this->isComplexScript($line)) {
+                $line = $this->renderTextWithUnicodeEscapes($line);
+                \Log::info('Using Unicode escape sequences for complex script text', [
+                    'original' => substr($line, 0, 50),
+                    'escaped' => substr($this->renderTextWithUnicodeEscapes($line), 0, 50)
+                ]);
+            } else {
+                $line = $this->escapeForASS($line);   // Escape special characters for ASS
+            }
 
             $ass .= sprintf(
                 "Dialogue: 0,0:00:00.00,0:00:10.00,Default,,0,0,0,,{\\an5\\pos(%d,%d)}%s\n",
@@ -638,6 +665,12 @@ class VideoRenderer
      */
     private function escapeForASS(string $text): string
     {
+        // For Tamil and other complex scripts, ensure proper Unicode handling
+        // Convert to UTF-8 NFC (Canonical Composition) for consistent rendering
+        if (function_exists('normalizer_normalize')) {
+            $text = normalizer_normalize($text, \Normalizer::FORM_C);
+        }
+
         // Escape backslash first (must be done before other escapes)
         $text = str_replace('\\', '\\\\', $text);
 
@@ -649,6 +682,91 @@ class VideoRenderer
         $text = str_replace('%', '%%', $text);
 
         return $text;
+    }
+
+    /**
+     * Convert Unicode text to ASCII-safe Unicode escape sequences for ASS subtitles.
+     * This can help with encoding issues in some ASS readers.
+     */
+    private function convertToUnicodeEscapes(string $text): string
+    {
+        $result = '';
+        $chars = mb_str_split($text, 1, 'UTF-8');
+
+        foreach ($chars as $char) {
+            $code = mb_ord($char, 'UTF-8');
+
+            // Keep ASCII characters as-is for readability
+            if ($code <= 127) {
+                $result .= $char;
+            } else {
+                // Convert Unicode characters to escape sequences
+                $result .= sprintf('\\u%04X', $code);
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * Alternative ASS text rendering using Unicode escape sequences.
+     * Use this if standard UTF-8 rendering fails.
+     */
+    private function renderTextWithUnicodeEscapes(string $text): string
+    {
+        // Normalize the text first
+        if (function_exists('normalizer_normalize')) {
+            $text = normalizer_normalize($text, \Normalizer::FORM_C);
+        }
+
+        // Convert to Unicode escape sequences
+        $escapedText = $this->convertToUnicodeEscapes($text);
+
+        // Apply ASS escaping
+        return $this->escapeForASS($escapedText);
+    }
+
+    /**
+     * Check if text contains complex script characters that may need special handling.
+     */
+    private function isComplexScript(string $text): bool
+    {
+        // Check for Tamil Unicode range (U+0B80 to U+0BFF)
+        if (preg_match('/[\x{0B80}-\x{0BFF}]/u', $text)) {
+            return true;
+        }
+
+        // Check for other Indic scripts
+        $complexRanges = [
+            '/[\x{0900}-\x{097F}]/u', // Devanagari (Hindi, Marathi, Sanskrit)
+            '/[\x{0980}-\x{09FF}]/u', // Bengali
+            '/[\x{0A00}-\x{0A7F}]/u', // Gurmukhi (Punjabi)
+            '/[\x{0A80}-\x{0AFF}]/u', // Gujarati
+            '/[\x{0B00}-\x{0B7F}]/u', // Oriya
+            '/[\x{0C00}-\x{0C7F}]/u', // Telugu
+            '/[\x{0C80}-\x{0CFF}]/u', // Kannada
+            '/[\x{0D00}-\x{0D7F}]/u', // Malayalam
+            '/[\x{0D80}-\x{0DFF}]/u', // Sinhala
+            '/[\x{0E00}-\x{0E7F}]/u', // Thai
+            '/[\x{0E80}-\x{0EFF}]/u', // Lao
+            '/[\x{0F00}-\x{0FFF}]/u', // Tibetan
+            '/[\x{1000}-\x{109F}]/u', // Myanmar
+            '/[\x{1780}-\x{17FF}]/u', // Khmer
+            '/[\x{4E00}-\x{9FFF}]/u', // CJK Unified Ideographs (Chinese, Japanese, Korean)
+            '/[\x{3040}-\x{309F}]/u', // Hiragana (Japanese)
+            '/[\x{30A0}-\x{30FF}]/u', // Katakana (Japanese)
+            '/[\x{AC00}-\x{D7AF}]/u', // Hangul Syllables (Korean)
+            '/[\x{0600}-\x{06FF}]/u', // Arabic
+            '/[\x{0750}-\x{077F}]/u', // Arabic Supplement
+        ];
+
+        foreach ($complexRanges as $range) {
+            if (preg_match($range, $text)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
