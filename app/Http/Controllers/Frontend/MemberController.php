@@ -390,10 +390,11 @@ class MemberController extends Controller
             abort(404, 'Video file not found.');
         }
 
-        // Extract timestamp from filename to verify it's a valid generated file
-        $parts = explode('_', pathinfo($filename, PATHINFO_FILENAME));
-        if (!isset($parts[0]) || !is_numeric($parts[0])) {
-            abort(404, 'Invalid video file.');
+        // Verify this is a valid generated video file by checking the filename format
+        // Event reel files are 40-character random strings + .mp4
+        $basename = pathinfo($filename, PATHINFO_FILENAME);
+        if (strlen($basename) !== 40 || !preg_match('/^[a-zA-Z0-9]+$/', $basename)) {
+            abort(404, 'Invalid video file format.');
         }
 
         return response()->download($filePath, $filename, [
