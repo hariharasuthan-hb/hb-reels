@@ -107,12 +107,53 @@ class ReelController
 
             // Get stock video from Pexels using optimized keywords
             $videoSearchTerm = $this->createOptimalVideoSearch($caption, $videoKeywords);
-            \Log::info('Starting Pexels video download', [
+            \Log::info('Starting Pexels video download (QUEUED)', [
                 'caption' => $caption,
                 'optimized_search' => $videoSearchTerm,
                 'ai_keywords' => $videoKeywords
             ]);
-            $stockVideoPath = $pexelsService->downloadVideo($videoSearchTerm);
+
+            // Try queued video download first, fallback to synchronous if queue fails
+            try {
+                \Log::info('Attempting queued video download', [
+                    'search_term' => $videoSearchTerm,
+                    'language' => $language
+                ]);
+
+                // Dispatch video download job and wait for completion
+                $jobId = $pexelsService->downloadVideoQueued($videoSearchTerm, [
+                    'language' => $language,
+                    'caption' => $caption,
+                    'request_id' => $request->get('request_id', Str::random(16))
+                ]);
+
+                \Log::info('Video download job dispatched, waiting for completion', [
+                    'job_id' => $jobId,
+                    'search_term' => $videoSearchTerm
+                ]);
+
+                // Wait for the download to complete (with timeout)
+                $stockVideoPath = $this->waitForVideoDownload($jobId, 60); // 60 second timeout
+
+                \Log::info('✅ Queued video download successful', [
+                    'job_id' => $jobId,
+                    'video_path' => $stockVideoPath
+                ]);
+
+            } catch (\Exception $queueException) {
+                \Log::warning('Queued video download failed, falling back to synchronous download', [
+                    'error' => $queueException->getMessage(),
+                    'search_term' => $videoSearchTerm
+                ]);
+
+                // Fallback to synchronous download
+                $stockVideoPath = $pexelsService->downloadVideo($videoSearchTerm);
+
+                \Log::info('✅ Synchronous video download successful (fallback)', [
+                    'video_path' => $stockVideoPath,
+                    'search_term' => $videoSearchTerm
+                ]);
+            }
 
             // Determine what to show in the video:
             // - If showFlyer is TRUE: Show flyer only, no captions
@@ -256,6 +297,60 @@ class ReelController
         });
 
         return implode(' ', array_slice($keywords, 0, 3)) ?: 'celebration event';
+    }
+
+    /**
+     * Wait for a queued video download to complete.
+     */
+    private function waitForVideoDownload(string $jobId, int $timeoutSeconds = 60): string
+    {
+        $startTime = time();
+        $pexelsService = app(PexelsService::class);
+
+        \Log::info('Waiting for video download completion', [
+            'job_id' => $jobId,
+            'timeout' => $timeoutSeconds
+        ]);
+
+        while (time() - $startTime < $timeoutSeconds) {
+            $status = $pexelsService->getDownloadStatus($jobId);
+
+            \Log::info('Checking video download status', [
+                'job_id' => $jobId,
+                'status' => $status['status'] ?? 'unknown',
+                'elapsed' => time() - $startTime
+            ]);
+
+            if ($status['status'] === 'completed') {
+                \Log::info('Video download completed successfully', [
+                    'job_id' => $jobId,
+                    'video_path' => $status['video_path'],
+                    'elapsed' => time() - $startTime
+                ]);
+                return $status['video_path'];
+            }
+
+            if ($status['status'] === 'failed' || $status['status'] === 'permanently_failed') {
+                $error = $status['error'] ?? 'Unknown download error';
+                \Log::error('Video download failed', [
+                    'job_id' => $jobId,
+                    'error' => $error,
+                    'elapsed' => time() - $startTime
+                ]);
+                throw new \Exception("Video download failed: {$error}");
+            }
+
+            // Wait 2 seconds before checking again
+            sleep(2);
+        }
+
+        \Log::error('Video download timeout', [
+            'job_id' => $jobId,
+            'timeout_seconds' => $timeoutSeconds,
+            'elapsed' => time() - $startTime
+        ]);
+
+        throw new \Exception("Video download timed out after {$timeoutSeconds} seconds. Please try again.");
     }
 
     /**
