@@ -419,11 +419,11 @@ class VideoRenderer
         // Generate ASS content
         $assContent = $this->generateASSSubtitle($lines, $fontFile, $fontSize, $yStart, $yStep, $width, $height, $language);
 
-        // Create temporary ASS file
-        $tempDir = storage_path('app/temp');
+        // Create temporary ASS file in the same directory as other temp files
+        $tempDir = storage_path('app/private/eventreel/temp');
         if (!is_dir($tempDir)) {
             mkdir($tempDir, 0755, true);
-            \Log::info('Created temp directory', ['path' => $tempDir]);
+            \Log::info('Created eventreel temp directory', ['path' => $tempDir]);
         }
         $assFilePath = $tempDir . '/' . Str::random(16) . '.ass';
 
