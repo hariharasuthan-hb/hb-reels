@@ -169,7 +169,28 @@ class MemberController extends Controller
      */
     public function subscriptions(): View
     {
-        return view('frontend.member.subscriptions');
+        $user = auth()->user();
+
+        // Get active subscription
+        $activeSubscription = $user->subscriptions()
+            ->with('subscriptionPlan')
+            ->whereIn('status', ['active', 'trialing'])
+            ->where(function ($query) {
+                $query->whereNull('next_billing_at')
+                      ->orWhere('next_billing_at', '>=', now());
+            })
+            ->first();
+
+        // Get all user subscriptions for history
+        $subscriptions = $user->subscriptions()
+            ->with('subscriptionPlan')
+            ->orderBy('created_at', 'desc')
+            ->get();
+
+        return view('frontend.member.subscription.index', compact(
+            'activeSubscription',
+            'subscriptions'
+        ));
     }
 
     /**
