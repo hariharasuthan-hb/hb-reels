@@ -2,6 +2,7 @@
 
 namespace HbReels\EventReelGenerator\Controllers;
 
+use App\Models\ActivityLog;
 use HbReels\EventReelGenerator\Services\AIService;
 use HbReels\EventReelGenerator\Services\OCRService;
 use HbReels\EventReelGenerator\Services\PexelsService;
@@ -105,6 +106,22 @@ class ReelController
                 flyerPath: $displayFlyerPath,
                 caption: $displayCaption
             );
+
+            // Log video generation activity
+            $videoFilename = basename($outputPath);
+            $videoSize = Storage::disk(config('eventreel.storage.disk'))->size($outputPath);
+
+            ActivityLog::create([
+                'user_id' => auth()->id(),
+                'activity_type' => 'video_generation',
+                'date' => now()->toDateString(),
+                'workout_summary' => 'Generated video reel: ' . $eventText,
+                'video_filename' => $videoFilename,
+                'video_caption' => $overlayText,
+                'video_path' => $outputPath,
+                'video_size_bytes' => $videoSize,
+                'check_in_method' => 'web',
+            ]);
 
             // Clean up temporary files
             if ($flyerPath) {

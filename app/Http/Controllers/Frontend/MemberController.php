@@ -194,23 +194,20 @@ class MemberController extends Controller
     }
 
     /**
-     * Show member activities.
+     * Show member activities (both gym check-ins and video generations).
      */
     public function activities(): View
     {
         $user = auth()->user();
 
-        // Get user's activities with pagination
+        // Get all user activities with pagination (both gym and video generation)
         $activities = \App\Models\ActivityLog::where('user_id', $user->id)
             ->with('user')
             ->orderBy('date', 'desc')
-            ->orderBy('check_in_time', 'desc')
+            ->orderBy('created_at', 'desc')
             ->paginate(20);
 
-        // Get user's generated videos
-        $videos = $this->getUserGeneratedVideos($user->id);
-
-        return view('frontend.member.activities', compact('activities', 'videos'));
+        return view('frontend.member.activities', compact('activities'));
     }
 
     /**

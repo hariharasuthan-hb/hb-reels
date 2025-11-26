@@ -6,7 +6,7 @@
         {{-- Page Header --}}
         <div class="mb-8">
             <h1 class="text-3xl font-bold text-gray-900">My Activities</h1>
-            <p class="mt-2 text-gray-600">View your check-in/check-out history and generated videos</p>
+            <p class="mt-2 text-gray-600">View your gym check-ins, check-outs, and video generation history</p>
         </div>
 
         {{-- Success Message --}}
@@ -45,11 +45,11 @@
                         <thead class="bg-gray-50">
                             <tr>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Check In</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Check Out</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Duration</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Details</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Duration/Size</th>
                                 <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Method</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Summary</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                             </tr>
                         </thead>
                         <tbody class="bg-white divide-y divide-gray-200">
@@ -60,50 +60,101 @@
                                             {{ $activity->date->format('M d, Y') }}
                                         </div>
                                         <div class="text-sm text-gray-500">
-                                            {{ $activity->date->format('l') }}
+                                            {{ $activity->created_at->format('h:i A') }}
                                         </div>
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap">
-                                        @if($activity->check_in_time)
-                                            <div class="text-sm text-gray-900">
-                                                {{ $activity->check_in_time->format('h:i A') }}
-                                            </div>
-                                            <div class="text-sm text-gray-500">
-                                                {{ $activity->check_in_time->diffForHumans() }}
-                                            </div>
+                                        @if($activity->activity_type === 'video_generation')
+                                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                                                <svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 24 24">
+                                                    <path d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+                                                </svg>
+                                                Video Generation
+                                            </span>
                                         @else
-                                            <span class="text-sm text-gray-400">-</span>
+                                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                                <svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                                                </svg>
+                                                Gym Activity
+                                            </span>
+                                        @endif
+                                    </td>
+                                    <td class="px-6 py-4">
+                                        @if($activity->activity_type === 'video_generation')
+                                            <div class="text-sm text-gray-900 font-medium">
+                                                {{ Str::limit($activity->workout_summary, 60) }}
+                                            </div>
+                                            @if($activity->video_caption)
+                                                <div class="text-sm text-gray-500 mt-1">
+                                                    Caption: {{ Str::limit($activity->video_caption, 40) }}
+                                                </div>
+                                            @endif
+                                        @else
+                                            @if($activity->check_in_time)
+                                                <div class="text-sm text-gray-900">
+                                                    Check-in: {{ $activity->check_in_time->format('h:i A') }}
+                                                </div>
+                                                @if($activity->check_out_time)
+                                                    <div class="text-sm text-gray-500">
+                                                        Check-out: {{ $activity->check_out_time->format('h:i A') }}
+                                                    </div>
+                                                @endif
+                                            @endif
                                         @endif
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap">
-                                        @if($activity->check_out_time)
-                                            <div class="text-sm text-gray-900">
-                                                {{ $activity->check_out_time->format('h:i A') }}
-                                            </div>
-                                            <div class="text-sm text-gray-500">
-                                                {{ $activity->check_out_time->diffForHumans() }}
-                                            </div>
+                                        @if($activity->activity_type === 'video_generation')
+                                            @if($activity->video_size_bytes)
+                                                <div class="text-sm text-gray-900">
+                                                    {{ number_format($activity->video_size_bytes / 1024 / 1024, 2) }} MB
+                                                </div>
+                                                <div class="text-sm text-gray-500">
+                                                    Video file
+                                                </div>
+                                            @else
+                                                <span class="text-sm text-gray-400">-</span>
+                                            @endif
                                         @else
-                                            <span class="text-sm text-gray-400">-</span>
+                                            @if($activity->duration_minutes)
+                                                <div class="text-sm text-gray-900">
+                                                    {{ floor($activity->duration_minutes / 60) }}h {{ $activity->duration_minutes % 60 }}m
+                                                </div>
+                                                <div class="text-sm text-gray-500">
+                                                    Workout time
+                                                </div>
+                                            @else
+                                                <span class="text-sm text-gray-400">-</span>
+                                            @endif
                                         @endif
                                     </td>
                                     <td class="px-6 py-4 whitespace-nowrap">
-                                        @if($activity->duration_minutes)
-                                            <div class="text-sm text-gray-900">
-                                                {{ floor($activity->duration_minutes / 60) }}h {{ $activity->duration_minutes % 60 }}m
-                                            </div>
+                                        @if($activity->activity_type === 'video_generation')
+                                            <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
+                                                Web
+                                            </span>
                                         @else
-                                            <span class="text-sm text-gray-400">-</span>
+                                            <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full
+                                                {{ $activity->check_in_method === 'manual' ? 'bg-blue-100 text-blue-800' : '' }}
+                                                {{ $activity->check_in_method === 'qr_code' ? 'bg-green-100 text-green-800' : '' }}
+                                                {{ $activity->check_in_method === 'rfid' ? 'bg-purple-100 text-purple-800' : '' }}
+                                                {{ !$activity->check_in_method ? 'bg-gray-100 text-gray-800' : '' }}">
+                                                {{ ucfirst($activity->check_in_method ?? 'N/A') }}
+                                            </span>
                                         @endif
                                     </td>
-                                    <td class="px-6 py-4 whitespace-nowrap">
-                                        <span class="inline-flex px-2 py-1 text-xs font-semibold rounded-full
-                                            {{ $activity->check_in_method === 'manual' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-800' }}">
-                                            {{ ucfirst($activity->check_in_method ?? 'N/A') }}
-                                        </span>
-                                    </td>
-                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                        {{ $activity->workout_summary ?? 'Manual check-in' }}
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                        @if($activity->activity_type === 'video_generation' && $activity->video_filename)
+                                            <a href="{{ route('member.download-video', ['filename' => $activity->video_filename]) }}"
+                                               class="text-blue-600 hover:text-blue-900 inline-flex items-center">
+                                                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                                                </svg>
+                                                Download
+                                            </a>
+                                        @else
+                                            <span class="text-gray-400">-</span>
+                                        @endif
                                     </td>
                                 </tr>
                             @endforeach
@@ -130,46 +181,6 @@
             @endif
         </div>
 
-        {{-- Generated Videos --}}
-        @if($videos->count() > 0)
-        <div class="bg-white rounded-lg shadow-lg overflow-hidden mb-8">
-            <div class="px-6 py-4 border-b border-gray-200">
-                <h2 class="text-xl font-semibold text-gray-900">Generated Videos</h2>
-                <p class="text-sm text-gray-600 mt-1">Videos you have created using the reel generator</p>
-            </div>
-
-            <div class="divide-y divide-gray-200">
-                @foreach($videos as $video)
-                <div class="px-6 py-4 hover:bg-gray-50 transition-colors">
-                    <div class="flex items-center justify-between">
-                        <div class="flex items-center space-x-4">
-                            <div class="flex-shrink-0">
-                                <svg class="w-10 h-10 text-red-500" fill="currentColor" viewBox="0 0 24 24">
-                                    <path d="M2 6H0v5h.01L0 20c0 1.1.89 2 2 2h17c.53 0 1.04-.21 1.41-.59.78-.78.78-2.05 0-2.83L13.84 6H2zm0 5h14.68l1.47 1.47c.39.39.39 1.02 0 1.41-.2.2-.45.3-.71.3H2V11zm11.5-5l-1.5-1.5L13.5 2l.5.5 1.5 1.5L13.5 6z"/>
-                                </svg>
-                            </div>
-                            <div>
-                                <h3 class="text-sm font-medium text-gray-900">{{ $video['filename'] }}</h3>
-                                <p class="text-sm text-gray-500">
-                                    Generated {{ $video['created_at_relative'] }} • {{ $video['size'] }}
-                                </p>
-                            </div>
-                        </div>
-                        <div class="flex items-center space-x-2">
-                            <a href="{{ $video['url'] }}"
-                               class="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
-                                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                                </svg>
-                                Download
-                            </a>
-                        </div>
-                    </div>
-                </div>
-                @endforeach
-            </div>
-        </div>
-        @endif
     </div>
 </div>
 @endsection
