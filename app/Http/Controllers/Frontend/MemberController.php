@@ -198,7 +198,16 @@ class MemberController extends Controller
      */
     public function activities(): View
     {
-        return view('frontend.member.activities');
+        $user = auth()->user();
+
+        // Get user's activities with pagination
+        $activities = \App\Models\ActivityLog::where('user_id', $user->id)
+            ->with('user')
+            ->orderBy('date', 'desc')
+            ->orderBy('check_in_time', 'desc')
+            ->paginate(20);
+
+        return view('frontend.member.activities', compact('activities'));
     }
 
     /**
