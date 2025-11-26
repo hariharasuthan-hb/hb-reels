@@ -24,6 +24,9 @@ class VideoRenderer
         $duration = config('eventreel.video.duration', 5);
         $fps = config('eventreel.video.fps', 30);
 
+        // Initialize tempFiles to prevent undefined variable errors
+        $tempFiles = [];
+
         // Auto-detect language if not specified
         if ($language === 'auto' && $caption) {
             $language = $this->detectLanguage($caption);
@@ -169,7 +172,7 @@ class VideoRenderer
         ?string $flyerPath = null,
         ?string $caption = null,
         string $language = 'en'
-    ): string {
+    ): array {
 
         $filters = [];
         $inputs = [];
