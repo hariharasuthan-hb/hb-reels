@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="ta">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tamil & Emoji Test</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Tamil:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Color+Emoji&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Noto Sans Tamil', 'Noto Color Emoji', Arial, sans-serif;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .tamil-text {
+            font-family: 'Noto Sans Tamil', 'NotoSansTamil', 'Noto Color Emoji', -apple-system, BlinkMacSystemFont, 'Segoe UI Emoji', 'Segoe UI Symbol', Roboto, sans-serif;
+            font-variant-emoji: emoji;
+            font-size: 18px;
+            margin: 10px 0;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .emoji-test {
+            font-size: 24px;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Tamil & Emoji Rendering Test</h1>
+
+    <h2>Tamil Text Only:</h2>
+    <div class="tamil-text">
+        வணக்கம்! இது ஒரு சோதனை தமிழ் உரை.
+        <br>
+        நான் தமிழ் எழுத்துகளை சரியாகக் காட்சி செய்கிறேன்.
+        <br>
+        குடில், நாடக, அக்ஷர, பதம், அக்ஷர போன்ற சொற்கள்.
+    </div>
+
+    <h2>Tamil Text with Emojis:</h2>
+    <div class="tamil-text">
+        லோஹித்துடன் வாழ்க்கையை கொண்டாடுங்கள்! 🎂🥳🎉
+        <br>
+        பிறந்தநாள் வாழ்த்துகள்! 🎈🎁
+        <br>
+        இனிய பிறந்தநாள் நல்வாழ்த்துகள்! 🎊
+    </div>
+
+    <h2>Emoji Only Test:</h2>
+    <div class="emoji-test">
+        🎂 🥳 🎉 🎈 🎁 🎊
+        <br>
+        😀 😊 😍 🎉 🎈
+        <br>
+        👍 👏 ❤️ 🎂
+    </div>
+
+    <h2>Mixed Content:</h2>
+    <div class="tamil-text">
+        வணக்கம்! Hello! 🎉
+        <br>
+        இன்று என்ன நாள்? Today is a great day! 🌞
+        <br>
+        தமிழ் + English + இமோஜி = 🎉🎂🥳
+    </div>
+</body>
+</html>

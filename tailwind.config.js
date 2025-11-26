@@ -16,6 +16,8 @@ export default {
         extend: {
             fontFamily: {
                 sans: ['Figtree', ...defaultTheme.fontFamily.sans],
+                tamil: ['Noto Sans Tamil', 'NotoSansTamil', 'Figtree', ...defaultTheme.fontFamily.sans],
+                emoji: ['Noto Color Emoji', 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Figtree', ...defaultTheme.fontFamily.sans],
             },
             colors: {
                 primary: {
