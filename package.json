@@ -5,6 +5,7 @@
     "scripts": {
         "build": "vite build",
         "dev": "concurrently -n \"vite,server,ngrok\" -c \"yellow,green,blue\" \"vite\" \"php artisan serve\" \"start-ngrok.bat\"",
+        "dev:full": "concurrently -n \"vite,server,ngrok,video-queue\" -c \"yellow,green,blue,red\" \"vite\" \"php artisan serve\" \"start-ngrok.bat\" \"php artisan hb-reels:process-video-downloads\"",
         "serve": "php artisan serve",
         "ai:serve": "ollama serve",
         "serve:all": "concurrently -n \"ollama,server\" -c \"magenta,green\" \"ollama serve\" \"php artisan serve\"",
@@ -12,7 +13,10 @@
         "ngrok": "ngrok http 8000",
         "serve:ngrok": "concurrently -n \"server,ngrok\" -c \"green,blue\" \"php artisan serve\" \"ngrok http 8000\"",
         "dev:ngrok": "concurrently -n \"vite,server,ngrok\" -c \"yellow,green,blue\" \"vite\" \"php artisan serve\" \"ngrok http 8000\"",
+        "dev:ngrok:full": "concurrently -n \"vite,server,ngrok,video-queue\" -c \"yellow,green,blue,red\" \"vite\" \"php artisan serve\" \"ngrok http 8000\" \"php artisan hb-reels:process-video-downloads\"",
         "dev:all": "concurrently -n \"vite,ollama,server\" -c \"yellow,magenta,green\" \"vite\" \"ollama serve\" \"php artisan serve\"",
+        "dev:all:full": "concurrently -n \"vite,ollama,server,video-queue\" -c \"yellow,magenta,green,red\" \"vite\" \"php artisan serve\" \"ollama serve\" \"php artisan hb-reels:process-video-downloads\"",
+        "video-queue": "php artisan hb-reels:process-video-downloads",
         "start:ngrok": "powershell -ExecutionPolicy Bypass -File ./start-ngrok.ps1",
         "dev:windows": "powershell -ExecutionPolicy Bypass -File ./start-dev-ngrok.ps1",
         "ngrok:url": "powershell -ExecutionPolicy Bypass -File ./get-ngrok-url.ps1"
