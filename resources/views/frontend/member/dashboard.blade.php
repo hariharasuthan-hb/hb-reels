@@ -7,49 +7,8 @@
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {{-- Page Header --}}
         <div class="mb-8">
-            <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                <div>
-                    <h1 class="text-3xl font-bold text-gray-900">Member Dashboard</h1>
-                    <p class="mt-2 text-gray-600">Welcome back! Here's your overview.</p>
-                </div>
-                <div class="flex flex-col md:flex-row md:items-center gap-3">
-                    @if($canTrackAttendance ?? false)
-                    @if(!($checkedInToday ?? false))
-                    <button id="check-in-btn" onclick="checkIn()" class="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-semibold flex items-center shadow-md">
-                        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                        </svg>
-                        Check In
-                    </button>
-                    @else
-                    <div class="px-4 py-2 bg-green-100 text-green-700 rounded-lg font-semibold flex items-center shadow-inner">
-                        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                        </svg>
-                        {{ $todayCheckInTimeFormatted ? 'Checked in at ' . $todayCheckInTimeFormatted : 'Checked in today' }}
-                    </div>
-                        @if(!($checkedOutToday ?? false))
-                        <button id="check-out-btn" onclick="checkOut()" class="px-6 py-3 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-semibold flex items-center shadow-md">
-                            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12H9m0 0l3-3m-3 3l3 3m-9 4a9 9 0 1118 0 9 9 0 01-18 0z"></path>
-                            </svg>
-                            Check Out
-                        </button>
-                        @else
-                        <div class="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg font-semibold flex items-center">
-                            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                            </svg>
-                            {{ $todayCheckOutTimeFormatted ? 'Checked out at ' . $todayCheckOutTimeFormatted : 'Checked out' }}
-                        </div>
-                        @endif
-                    @endif
-                    @else
-                    <div class="px-4 py-2 bg-gray-100 text-gray-600 rounded-lg font-semibold">
-                        You need an active subscription to track attendance.
-                    </div>
-                    @endif
-                </div>
+            <h1 class="text-3xl font-bold text-gray-900">Member Dashboard</h1>
+            <p class="mt-2 text-gray-600">Welcome back! Here's your overview.</p>
             </div>
         </div>
 
@@ -165,7 +124,13 @@
             @php
                 $subscriptionAnchor = route('member.dashboard') . '#subscription-plans';
             @endphp
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <a href="{{ route('eventreel.index') }}" class="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                    <svg class="w-5 h-5 text-purple-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                    </svg>
+                    <span class="font-medium text-gray-900">Generate Video</span>
+                </a>
                 <a href="{{ route('member.activities') }}" class="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
                     <svg class="w-5 h-5 text-blue-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
