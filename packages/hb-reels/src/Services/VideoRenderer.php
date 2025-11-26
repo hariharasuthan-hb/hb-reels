@@ -113,18 +113,39 @@ class VideoRenderer
         // Execute FFmpeg
         exec($command . ' 2>&1', $output, $returnCode);
 
-        // Clean up temporary ASS files created for this rendering job
+        if ($returnCode !== 0) {
+            // Keep temp files for debugging on failure
+            \Log::error('FFmpeg failed, keeping temp files for debugging', [
+                'temp_files' => $tempFiles,
+                'error_output' => implode("\n", $output),
+                'ffmpeg_command' => $command
+            ]);
+
+            // Log ASS file contents for debugging
+            if (!empty($tempFiles)) {
+                foreach ($tempFiles as $tempFile) {
+                    if (file_exists($tempFile)) {
+                        $content = file_get_contents($tempFile);
+                        \Log::error('ASS file content for debugging', [
+                            'file' => $tempFile,
+                            'content_length' => strlen($content),
+                            'content' => strlen($content) < 1000 ? $content : substr($content, 0, 1000) . '...[truncated]'
+                        ]);
+                    }
+                }
+            }
+
+            throw new \Exception('Video rendering failed: ' . implode("\n", $output));
+        }
+
+        // Clean up temporary ASS files only after successful rendering
         if (!empty($tempFiles)) {
             foreach ($tempFiles as $tempFile) {
                 if (file_exists($tempFile)) {
                     @unlink($tempFile);
-                    \Log::info('Cleaned up temporary ASS file', ['file' => $tempFile]);
+                    \Log::info('Cleaned up temporary ASS file after successful rendering', ['file' => $tempFile]);
                 }
             }
-        }
-
-        if ($returnCode !== 0) {
-            throw new \Exception('Video rendering failed: ' . implode("\n", $output));
         }
 
         return $outputPath;
@@ -420,7 +441,8 @@ class VideoRenderer
             'file_size' => filesize($assFilePath),
             'content_length' => strlen($assContent),
             'temp_dir_exists' => is_dir($tempDir),
-            'temp_dir_writable' => is_writable($tempDir)
+            'temp_dir_writable' => is_writable($tempDir),
+            'content_preview' => substr($assContent, 0, 200) . (strlen($assContent) > 200 ? '...' : '')
         ]);
 
         return $assFilePath;
