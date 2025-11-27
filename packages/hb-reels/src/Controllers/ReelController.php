@@ -2,6 +2,7 @@
 
 namespace HbReels\EventReelGenerator\Controllers;
 
+use App\Models\ActivityLog;
 use HbReels\EventReelGenerator\Services\AIService;
 use HbReels\EventReelGenerator\Services\OCRService;
 use HbReels\EventReelGenerator\Services\PexelsService;
@@ -22,6 +23,19 @@ class ReelController
      */
     public function index()
     {
+        // Check if user is authenticated and has active subscription
+        if (!auth()->check()) {
+            return redirect()->route('login')->with('error', 'Please login to access the video generator.');
+        }
+
+        if (!auth()->user()->hasRole('member')) {
+            return redirect()->route('frontend.home')->with('error', 'Access denied. Member access required.');
+        }
+
+        if (!auth()->user()->hasActiveSubscription()) {
+            return redirect()->route('member.subscriptions')->with('error', 'You need an active subscription to generate videos. Please subscribe to continue.');
+        }
+
         return view('eventreel::index');
     }
 
@@ -30,6 +44,19 @@ class ReelController
      */
     public function generate(Request $request)
     {
+        // Check if user is authenticated and has active subscription
+        if (!auth()->check()) {
+            return redirect()->route('login')->with('error', 'Please login to access the video generator.');
+        }
+
+        if (!auth()->user()->hasRole('member')) {
+            return redirect()->route('frontend.home')->with('error', 'Access denied. Member access required.');
+        }
+
+        if (!auth()->user()->hasActiveSubscription()) {
+            return redirect()->route('member.subscriptions')->with('error', 'You need an active subscription to generate videos. Please subscribe to continue.');
+        }
+
         $request->validate([
             'flyer_image' => 'nullable|image|mimes:jpeg,jpg,png|max:10240',
             'event_text' => 'nullable|string|max:2000',
@@ -105,6 +132,22 @@ class ReelController
                 flyerPath: $displayFlyerPath,
                 caption: $displayCaption
             );
+
+            // Log video generation activity
+            $videoFilename = basename($outputPath);
+            $videoSize = Storage::disk(config('eventreel.storage.disk'))->size($outputPath);
+
+            ActivityLog::create([
+                'user_id' => auth()->id(),
+                'activity_type' => 'event_reel_generation',
+                'date' => now()->toDateString(),
+                'workout_summary' => 'Generated event reel: ' . $eventText,
+                'video_filename' => $videoFilename,
+                'video_caption' => $overlayText,
+                'video_path' => $outputPath,
+                'video_size_bytes' => $videoSize,
+                'check_in_method' => 'web',
+            ]);
 
             // Clean up temporary files
             if ($flyerPath) {

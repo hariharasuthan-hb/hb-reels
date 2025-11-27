@@ -29,6 +29,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'role' => \App\Http\Middleware\RoleMiddleware::class,
             'permission' => \App\Http\Middleware\PermissionMiddleware::class,
             'increase.post.size' => \App\Http\Middleware\IncreasePostSize::class,
+            'check.subscription' => \App\Http\Middleware\CheckSubscription::class,
         ]);
         
         // Apply to routes that handle large file uploads

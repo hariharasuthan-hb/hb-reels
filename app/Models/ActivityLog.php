@@ -24,6 +24,7 @@ class ActivityLog extends Model
      */
     protected $fillable = [
         'user_id',
+        'activity_type',
         'date',
         'check_in_time',
         'check_out_time',
@@ -34,6 +35,10 @@ class ActivityLog extends Model
         'performance_metrics',
         'check_in_method',
         'checked_in_by',
+        'video_filename',
+        'video_caption',
+        'video_path',
+        'video_size_bytes',
     ];
 
     /**
@@ -51,6 +56,7 @@ class ActivityLog extends Model
             'performance_metrics' => 'array',
             'duration_minutes' => 'integer',
             'calories_burned' => 'decimal:2',
+            'video_size_bytes' => 'integer',
         ];
     }
 

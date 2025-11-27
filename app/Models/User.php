@@ -106,6 +106,39 @@ class User extends Authenticatable
     }
 
     /**
+     * Check if user has an active subscription (including trial).
+     */
+    public function hasActiveSubscription(): bool
+    {
+        $subscription = $this->activeSubscription;
+        return $subscription && $subscription->hasAccess();
+    }
+
+    /**
+     * Check if user is on trial.
+     */
+    public function isOnTrial(): bool
+    {
+        $subscription = $this->activeSubscription;
+        return $subscription && $subscription->isTrialing();
+    }
+
+    /**
+     * Check if user can access subscription features.
+     * Returns true if user is admin OR has active subscription.
+     */
+    public function canAccessSubscriptionFeatures(): bool
+    {
+        // Admins can always access
+        if ($this->hasRole('admin')) {
+            return true;
+        }
+
+        // Check if user is active and has valid subscription
+        return $this->isActive() && $this->hasActiveSubscription();
+    }
+
+    /**
      * Notifications assigned to the user.
      */
     public function receivedNotifications()

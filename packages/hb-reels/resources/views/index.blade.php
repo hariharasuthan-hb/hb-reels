@@ -11,7 +11,80 @@
     <div class="w-full max-w-md">
         {{-- Main Card --}}
         <div class="bg-white rounded-2xl shadow-2xl p-6 md:p-8">
-            <h1 class="text-2xl font-bold text-gray-900 mb-6 text-center">Event Reel Generator</h1>
+            <div class="flex justify-between items-center mb-6">
+                <h1 class="text-2xl font-bold text-gray-900">Event Reel Generator</h1>
+                @auth
+                    @if(auth()->user()->hasRole('member'))
+                        <a href="{{ route('member.dashboard') }}" class="px-4 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors font-medium flex items-center gap-2">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2H5a2 2 0 00-2-2z"></path>
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5a2 2 0 012-2h4a2 2 0 012 2v4H8V5z"></path>
+                            </svg>
+                            Dashboard
+                        </a>
+                    @endif
+                @endauth
+            </div>
+
+            {{-- Subscription Status Badge --}}
+            @auth
+                @php
+                    $user = auth()->user();
+                    $subscription = $user->activeSubscription;
+                @endphp
+
+                @if($user->hasRole('admin'))
+                    <div class="mb-4 p-3 bg-purple-50 border border-purple-200 rounded-lg flex items-center gap-2">
+                        <svg class="w-5 h-5 text-purple-600" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                        </svg>
+                        <div>
+                            <span class="text-sm font-medium text-purple-800">Admin Access - Full Access Granted</span>
+                            <p class="text-xs text-purple-700 mt-1">Unlimited video generation available</p>
+                        </div>
+                    </div>
+                @elseif($subscription && $subscription->isTrialing())
+                    @php
+                        $daysLeft = $subscription->trial_end_at ? now()->diffInDays($subscription->trial_end_at, false) : 0;
+                    @endphp
+                    <div class="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                        <div class="flex items-center gap-2">
+                            <svg class="w-5 h-5 text-yellow-600" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd"/>
+                            </svg>
+                            <div>
+                                <span class="text-sm font-medium text-yellow-800">Trial Period - {{ $daysLeft }} day(s) remaining</span>
+                                <p class="text-xs text-yellow-700 mt-1">Full video generation access during trial</p>
+                            </div>
+                        </div>
+                        @if($daysLeft <= 3)
+                            <p class="text-xs text-yellow-700 mt-1 ml-7">Subscribe now to continue access after trial!</p>
+                        @endif
+                    </div>
+                @elseif($subscription && $subscription->isActive())
+                    <div class="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg flex items-center gap-2">
+                        <svg class="w-5 h-5 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+                        </svg>
+                        <div>
+                            <span class="text-sm font-medium text-green-800">Active Subscription</span>
+                            <p class="text-xs text-green-700 mt-1">Unlimited video generation available</p>
+                        </div>
+                    </div>
+                @endif
+            @endauth
+
+            {{-- Trial Warning Flash Message --}}
+            @if(session('trial_warning'))
+                <div class="mb-4 p-4 bg-yellow-50 border border-yellow-300 rounded-lg">
+                    <div class="flex items-start gap-2">
+                        <svg class="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/>
+                        </svg>
+                        <p class="text-sm text-yellow-800">{{ session('trial_warning') }}</p>
+                    </div>
+                </div>
+            @endif
 
             @if(session('error'))
                 <div class="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
@@ -109,22 +182,6 @@
                     </label>
                 </div>
 
-                {{-- Access Code (if configured) --}}
-                @if(config('eventreel.access_code'))
-                <div class="mb-6">
-                    <label for="access_code" class="block text-sm font-medium text-gray-700 mb-2">
-                        Access Code
-                    </label>
-                    <input 
-                        type="text" 
-                        id="access_code" 
-                        name="access_code" 
-                        class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                        placeholder="Enter access code"
-                        value="{{ old('access_code') }}"
-                    >
-                </div>
-                @endif
 
                 {{-- Generate Button --}}
                 <button 
