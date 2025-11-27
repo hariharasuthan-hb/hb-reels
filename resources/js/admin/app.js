@@ -23,7 +23,7 @@ initYajraDataTable();
 document.addEventListener('DOMContentLoaded', function() {
     // Admin dashboard functionality
     console.log('Admin dashboard loaded');
-
+    
     initConfirmDialogs();
 });
 

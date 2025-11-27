@@ -1,6 +1,6 @@
 /**
  * Rich Text Editor Initialization
- *
+ * 
  * Handles TinyMCE initialization for rich text editor components.
  * Ensures proper HTML encoding/decoding and handles form submissions.
  */
@@ -61,7 +61,7 @@ export function initRichTextEditor(editorId, options = {}) {
                 // Content is already in correct format, no encoding needed
                 // TinyMCE handles HTML properly
             });
-
+            
             // Handle form submission
             editor.on('submit', function() {
                 // Get content and ensure it's properly formatted

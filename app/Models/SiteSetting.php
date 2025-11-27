@@ -17,6 +17,11 @@ class SiteSetting extends Model
         'instagram_url',
         'linkedin_url',
         'footer_partner',
+        'show_title_near_logo',
+    ];
+
+    protected $casts = [
+        'show_title_near_logo' => 'boolean',
     ];
 
     /**

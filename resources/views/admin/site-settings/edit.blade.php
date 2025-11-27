@@ -73,6 +73,23 @@
                         'placeholder' => 'Enter site title',
                         'colspan' => 2,
                     ])
+
+                    {{-- Show Title Near Logo Checkbox --}}
+                    <div class="md:col-span-2">
+                        <div class="flex items-center">
+                            <input type="hidden" name="show_title_near_logo" value="0">
+                            <input type="checkbox"
+                                   name="show_title_near_logo"
+                                   id="show_title_near_logo"
+                                   value="1"
+                                   {{ old('show_title_near_logo', $settings->show_title_near_logo ?? true) ? 'checked' : '' }}
+                                   class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                            <label for="show_title_near_logo" class="ml-2 block text-sm text-gray-700 font-medium">
+                                Show site title near logo in header
+                            </label>
+                        </div>
+                        <p class="mt-1 text-sm text-gray-500">When checked, the site title will be displayed next to the logo in the header. By default, the title is shown.</p>
+                    </div>
                     
                     {{-- Logo Upload --}}
                     <div class="md:col-span-2">

@@ -18,7 +18,9 @@
                     @if($logo)
                         <img src="{{ \Illuminate\Support\Facades\Storage::url($logo) }}" alt="{{ $siteTitle }}" class="h-12 object-contain">
                     @endif
-                    <span class="text-2xl font-bold bg-gradient-to-r from-orange-500 to-black bg-clip-text text-transparent">{{ $siteTitle }}</span>
+                    @if($siteSettings->show_title_near_logo ?? true)
+                        <span class="text-2xl font-bold bg-gradient-to-r from-orange-500 to-black bg-clip-text text-transparent">{{ $siteTitle }}</span>
+                    @endif
                 </a>
             </div>
             

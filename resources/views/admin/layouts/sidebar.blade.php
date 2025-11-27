@@ -15,19 +15,27 @@
         <div class="mb-4" :class="{ 'lg:mb-3': $root.sidebarCollapsed }">
             @if($logo)
                 <a href="{{ route('admin.dashboard') }}" class="flex items-center justify-center">
-                    <img src="{{ \Illuminate\Support\Facades\Storage::url($logo) }}" 
-                         alt="{{ $siteTitle }}" 
+                    <img src="{{ \Illuminate\Support\Facades\Storage::url($logo) }}"
+                         alt="{{ $siteTitle }}"
                          class="h-10 w-auto object-contain transition-all duration-300"
                          :class="{ 'lg:h-8': $root.sidebarCollapsed, 'lg:h-10': !$root.sidebarCollapsed }">
+                    @if($siteSettings->show_title_near_logo ?? true)
+                        <span class="text-xl font-bold gradient-text ml-3 transition-all duration-300"
+                              :class="{ 'lg:hidden': $root.sidebarCollapsed }">
+                            {{ $siteTitle }}
+                        </span>
+                    @endif
                 </a>
             @else
-                <h2 class="text-xl font-bold gradient-text text-center" 
-                    :class="{ 'lg:text-sm lg:mb-0': $root.sidebarCollapsed }">
-                    <span :class="{ 'lg:hidden': $root.sidebarCollapsed }">{{ $siteTitle }}</span>
-                    <span :class="{ 'lg:hidden': !$root.sidebarCollapsed }" class="hidden lg:block">
-                        {{ strtoupper(substr($siteTitle, 0, 2)) }}
-                    </span>
-                </h2>
+                @if($siteSettings->show_title_near_logo ?? true)
+                    <h2 class="text-xl font-bold gradient-text text-center"
+                        :class="{ 'lg:text-sm lg:mb-0': $root.sidebarCollapsed }">
+                        <span :class="{ 'lg:hidden': $root.sidebarCollapsed }">{{ $siteTitle }}</span>
+                        <span :class="{ 'lg:hidden': !$root.sidebarCollapsed }" class="hidden lg:block">
+                            {{ strtoupper(substr($siteTitle, 0, 2)) }}
+                        </span>
+                    </h2>
+                @endif
             @endif
         </div>
         
