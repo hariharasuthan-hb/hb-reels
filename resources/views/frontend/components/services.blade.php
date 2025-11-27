@@ -68,7 +68,7 @@
         <div class="text-center mb-12">
             <h2 class="text-4xl font-bold mb-4 {{ $servicesBackgroundImage ? 'text-white' : 'text-gray-900' }}">{{ $servicesTitle }}</h2>
             <p class="{{ $servicesBackgroundImage ? 'text-white' : 'text-gray-600' }} max-w-2xl mx-auto">
-                {{ $servicesDescription }}
+                {!! $servicesDescription !!}
             </p>
         </div>
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
@@ -78,7 +78,7 @@
                         <img src="{{ $service['image'] }}" alt="{{ $service['title'] ?? 'Service' }}" class="w-full h-48 object-cover rounded-lg mb-4">
                     @endif
                     <h3 class="text-2xl font-semibold mb-3">{{ $service['title'] ?? 'Service' }}</h3>
-                    <p class="text-gray-600 mb-4">{{ $service['description'] ?? '' }}</p>
+                    <p class="text-gray-600 mb-4">{!! $service['description'] ?? '' !!}</p>
                     <a href="{{ $service['link'] ?? '#contact' }}" class="text-blue-600 font-semibold">
                         {{ $service['link_text'] ?? 'Learn More' }} →
                     </a>

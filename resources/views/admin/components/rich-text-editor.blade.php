@@ -51,7 +51,9 @@
     $toolbarConfig = $toolbarConfigs[$toolbar] ?? $toolbarConfigs['full'];
     
     // Generate unique ID for this editor instance
-    $editorId = 'rich-text-editor-' . str_replace(['[', ']'], ['-', ''], $name) . '-' . uniqid();
+    // Ensure it starts with a letter and contains only valid characters
+    $uniqueId = 'a' . uniqid();
+    $editorId = 'rich-text-editor-' . preg_replace('/[^A-Za-z0-9_-]/', '_', $name) . '-' . $uniqueId;
 @endphp
 
 <div class="md:col-span-{{ $colspan }}">
@@ -89,14 +91,53 @@
 {{-- TinyMCE styles are imported via JavaScript --}}
 
 @push('scripts')
+    {{-- Load TinyMCE from local assets --}}
+    <script src="{{ asset('js/tinymce/tinymce.min.js') }}"></script>
+
     <script>
         // Initialize this editor when DOM is ready
         document.addEventListener('DOMContentLoaded', function() {
-            if (typeof initRichTextEditor === 'function') {
-                initRichTextEditor('{{ $editorId }}', {
-                    toolbar: '{{ $toolbarConfig }}',
+            if (typeof tinymce !== 'undefined') {
+                tinymce.init({
+                    selector: '#{{ $editorId }}',
                     height: {{ $height }},
-                    plugins: {!! json_encode($plugins) !!}
+                    menubar: false,
+                    plugins: {!! json_encode($plugins) !!},
+                    toolbar: {!! json_encode($toolbarConfig) !!},
+                    license_key: 'gpl',
+                    content_style: 'body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; font-size: 14px; }',
+                    branding: false,
+                    promotion: false,
+                    resize: true,
+                    convert_urls: false,
+                    relative_urls: false,
+                    remove_script_host: false,
+                    entity_encoding: 'raw',
+                    autoresize_bottom_margin: 16,
+                    autoresize_min_height: {{ $height }},
+                    autoresize_max_height: 800,
+                    setup: function(editor) {
+                        editor.on('SaveContent', function(e) {
+                            // TinyMCE handles HTML properly
+                        });
+
+                        editor.on('submit', function() {
+                            const content = editor.getContent();
+                            editor.save();
+                        });
+                    },
+                    images_upload_handler: function(blobInfo, progress) {
+                        return new Promise(function(resolve, reject) {
+                            const reader = new FileReader();
+                            reader.onload = function() {
+                                resolve(reader.result);
+                            };
+                            reader.onerror = function() {
+                                reject('Image upload failed');
+                            };
+                            reader.readAsDataURL(blobInfo.blob());
+                        });
+                    }
                 });
             }
         });

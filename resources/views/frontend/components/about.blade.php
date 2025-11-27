@@ -51,7 +51,7 @@
             <h2 class="text-4xl font-bold mb-4 {{ $aboutBackgroundImage ? 'text-white' : 'text-gray-900' }}">{{ $aboutTitle }}</h2>
             @if($aboutDescription && !$aboutImage)
                 <p class="{{ $aboutBackgroundImage ? 'text-white' : 'text-gray-600' }} max-w-2xl mx-auto text-lg">
-                    {{ $aboutDescription }}
+                    {!! $aboutDescription !!}
                 </p>
             @endif
         </div>
@@ -70,7 +70,7 @@
                     <div class="space-y-6">
                         <h3 class="text-3xl font-bold {{ $aboutBackgroundImage ? 'text-white' : 'text-gray-900' }}">Why Choose Us?</h3>
                         <p class="{{ $aboutBackgroundImage ? 'text-white' : 'text-gray-700' }} text-lg leading-relaxed">
-                            {{ $aboutDescription }}
+                            {!! $aboutDescription !!}
                         </p>
                         @if($cmsAbout && $cmsAbout->link)
                             <a href="{{ $cmsAbout->link }}" 
@@ -84,7 +84,7 @@
         @elseif($aboutDescription)
             <div class="max-w-3xl mx-auto mb-12">
                 <p class="{{ $aboutBackgroundImage ? 'text-white' : 'text-gray-700' }} text-lg leading-relaxed text-center">
-                    {{ $aboutDescription }}
+                    {!! $aboutDescription !!}
                 </p>
             </div>
         @endif
@@ -101,7 +101,7 @@
                             <div class="text-5xl mb-6">{{ $feature['icon'] ?? '💪' }}</div>
                         @endif
                         <h3 class="text-xl font-bold mb-3 text-gray-900">{{ $feature['title'] ?? 'Feature' }}</h3>
-                        <p class="text-gray-600 leading-relaxed">{{ $feature['description'] ?? '' }}</p>
+                        <p class="text-gray-600 leading-relaxed">{!! $feature['description'] ?? '' !!}</p>
                     </div>
                 @endforeach
             </div>

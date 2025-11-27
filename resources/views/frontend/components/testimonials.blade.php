@@ -58,7 +58,7 @@
         <div class="text-center mb-12">
             <h2 class="text-4xl font-bold mb-4 {{ $testimonialsBackgroundImage ? 'text-white' : 'text-gray-900' }}">{{ $testimonialsTitle }}</h2>
             <p class="{{ $testimonialsBackgroundImage ? 'text-white' : 'text-gray-600' }} max-w-2xl mx-auto">
-                {{ $testimonialsDescription }}
+                {!! $testimonialsDescription !!}
             </p>
         </div>
         @if($sectionVideo)
@@ -102,7 +102,7 @@
                         @endif
 
                         <p class="text-gray-600 italic mb-4">
-                            "{{ $testimonial->content ?? $testimonial->description ?? '' }}"
+                            "{!! $testimonial->content ?? $testimonial->description ?? '' !!}"
                         </p>
                         @if($testimonial->extra_data && isset($testimonial->extra_data['rating']))
                             <div class="flex items-center">

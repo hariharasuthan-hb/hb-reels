@@ -33,6 +33,6 @@
         "datatables.net-buttons-dt": "^3.2.5",
         "datatables.net-dt": "^2.3.5",
         "jquery": "^3.7.1",
-        "tinymce": "^8.2.2"
+        "tinymce": "^6.8.3"
     }
 }

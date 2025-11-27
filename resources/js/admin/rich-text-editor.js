@@ -1,6 +1,6 @@
 /**
  * Rich Text Editor Initialization
- * 
+ *
  * Handles TinyMCE initialization for rich text editor components.
  * Ensures proper HTML encoding/decoding and handles form submissions.
  */
@@ -10,6 +10,9 @@ import tinymce from 'tinymce';
 
 // Import theme
 import 'tinymce/themes/silver';
+
+// Import icons
+import 'tinymce/icons/default';
 
 // Import plugins
 import 'tinymce/plugins/lists';
@@ -23,6 +26,7 @@ import 'tinymce/plugins/autoresize';
 
 // Import content CSS
 import 'tinymce/skins/ui/oxide/content.min.css';
+import 'tinymce/skins/ui/oxide/skin.min.css';
 
 /**
  * Initialize a rich text editor instance
@@ -57,7 +61,7 @@ export function initRichTextEditor(editorId, options = {}) {
                 // Content is already in correct format, no encoding needed
                 // TinyMCE handles HTML properly
             });
-            
+
             // Handle form submission
             editor.on('submit', function() {
                 // Get content and ensure it's properly formatted
