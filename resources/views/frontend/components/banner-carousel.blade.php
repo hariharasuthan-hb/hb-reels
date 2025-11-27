@@ -23,7 +23,11 @@
                      style="background-image: url('{{ $imageUrl }}'); background-size: cover; background-position: center;">
                     <div class="absolute inset-0" style="background-color: {{ $rgba }};"></div>
                     <div class="container mx-auto px-4 h-full flex items-center relative z-10">
-                        <div class="text-center text-white max-w-4xl mx-auto">
+                        @php
+                            $titleLength = $banner->title ? strlen($banner->title) : 0;
+                            $isLongTitle = $titleLength > 50; // Consider titles longer than 50 characters as long
+                        @endphp
+                        <div class="{{ $isLongTitle ? 'text-left' : 'text-center' }} text-white max-w-4xl {{ $isLongTitle ? 'mr-auto' : 'mx-auto' }} w-full">
                             @if($banner->title)
                                 @php
                                     // Process title to make "Burn" and "Build" bold and italic
@@ -31,18 +35,19 @@
                                     $title = preg_replace('/\b(Burn)\b/i', '<span class="font-bold italic">$1</span>', $title);
                                     $title = preg_replace('/\b(Build)\b/i', '<span class="font-bold italic">$1</span>', $title);
                                 @endphp
-                                <h1 class="text-5xl md:text-6xl font-bold mb-4 animate-fade-in-up whitespace-nowrap">
+                                <h1 class="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold mb-4 animate-slide-left leading-tight break-words px-4 {{ $isLongTitle ? 'text-left' : '' }}" style="word-wrap: break-word; overflow-wrap: break-word;">
                                     {!! $title !!}
                                 </h1>
                             @endif
                             @if($banner->subtitle)
-                                <p class="text-xl md:text-2xl mb-8 animate-fade-in-up-delay">
+                                <p class="text-lg sm:text-xl md:text-2xl mb-8 animate-slide-left leading-relaxed break-words px-4 {{ $isLongTitle ? 'text-left' : '' }}" style="word-wrap: break-word; overflow-wrap: break-word; animation-delay: 0.6s;">
                                     {{ $banner->subtitle }}
                                 </p>
                             @endif
                             @if($banner->link)
-                                <a href="{{ $banner->link }}" 
-                                   class="inline-block bg-white text-gray-900 px-8 py-4 rounded-lg font-semibold text-lg hover:bg-gray-100 transition transform hover:scale-105 animate-fade-in-up-delay-2">
+                                <a href="{{ $banner->link }}"
+                                   class="inline-block bg-white text-gray-900 px-8 py-4 rounded-lg font-semibold text-lg hover:bg-gray-100 transition transform hover:scale-105 animate-slide-left {{ $isLongTitle ? 'mr-auto' : '' }}"
+                                   style="animation-delay: 0.9s;">
                                     {{ $banner->link_text ?? 'Learn More' }}
                                 </a>
                             @endif
@@ -100,6 +105,23 @@
 
 .animate-fade-in-up-delay-2 {
     animation: fade-in-up 0.8s ease-out 0.4s both;
+}
+
+@keyframes slide-in-left {
+    0% {
+        transform: translateX(-20px);
+        opacity: 0;
+    }
+    100% {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+.animate-slide-left {
+    animation: slide-in-left 0.6s ease-out;
+    animation-fill-mode: both;
+    opacity: 1;
 }
 </style>
 
