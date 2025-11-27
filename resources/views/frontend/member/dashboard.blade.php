@@ -13,12 +13,21 @@
                     <p class="mt-2 text-gray-600">Welcome back! Here's your overview.</p>
                 </div>
                 <div class="flex flex-col md:flex-row md:items-center gap-3">
-                    <a href="{{ route('eventreel.index') }}" class="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-semibold flex items-center shadow-md">
-                        <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
-                        </svg>
-                        Generate Video
-                    </a>
+                    @if($activeSubscription)
+                        <a href="{{ route('eventreel.index') }}" class="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-semibold flex items-center shadow-md">
+                            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                            </svg>
+                            Generate Video
+                        </a>
+                    @else
+                        <div class="px-6 py-3 bg-gray-400 text-white rounded-lg font-semibold flex items-center shadow-md cursor-not-allowed opacity-50">
+                            <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                            </svg>
+                            <span title="Subscribe to unlock video generation">Generate Video</span>
+                        </div>
+                    @endif
                 </div>
             </div>
         </div>
@@ -162,28 +171,50 @@
         <div class="bg-white rounded-lg shadow p-6">
             <h2 class="text-xl font-semibold text-gray-900 mb-4">Recent Activities</h2>
             <div class="space-y-4">
-                <div class="flex items-center p-4 border border-gray-200 rounded-lg">
-                    <div class="flex-shrink-0 w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                        <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                @if($recentActivities && $recentActivities->count() > 0)
+                    @foreach($recentActivities as $activity)
+                        <div class="flex items-center p-4 border border-gray-200 rounded-lg">
+                            <div class="flex-shrink-0 w-10 h-10 {{ $activity->activity_type === 'event_reel_generation' ? 'bg-purple-100' : 'bg-blue-100' }} rounded-full flex items-center justify-center">
+                                @if($activity->activity_type === 'event_reel_generation')
+                                    <svg class="w-5 h-5 {{ $activity->activity_type === 'event_reel_generation' ? 'text-purple-600' : 'text-blue-600' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                                    </svg>
+                                @else
+                                    <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
+                                    </svg>
+                                @endif
+                            </div>
+                            <div class="ml-4 flex-1">
+                                <p class="text-sm font-medium text-gray-900">
+                                    @if($activity->activity_type === 'event_reel_generation')
+                                        Video Generated
+                                    @else
+                                        {{ ucfirst(str_replace('_', ' ', $activity->activity_type ?? 'Activity logged')) }}
+                                    @endif
+                                </p>
+                                <p class="text-sm text-gray-500">{{ $activity->created_at->diffForHumans() }}</p>
+                                @if($activity->activity_type === 'event_reel_generation' && $activity->workout_summary)
+                                    <p class="text-xs text-gray-400 mt-1">{{ Str::limit($activity->workout_summary, 60) }}</p>
+                                @endif
+                            </div>
+                        </div>
+                    @endforeach
+                @else
+                    <div class="text-center py-8">
+                        <svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
                         </svg>
+                        <h3 class="mt-2 text-sm font-medium text-gray-900">No activities yet</h3>
+                        <p class="mt-1 text-sm text-gray-500">
+                            @if($hasActiveSubscription)
+                                Start by generating a video or checking in to see your activities here.
+                            @else
+                                Subscribe to unlock activity tracking and video generation features.
+                            @endif
+                        </p>
                     </div>
-                    <div class="ml-4 flex-1">
-                        <p class="text-sm font-medium text-gray-900">Activity logged</p>
-                        <p class="text-sm text-gray-500">2 hours ago</p>
-                    </div>
-                </div>
-                <div class="flex items-center p-4 border border-gray-200 rounded-lg">
-                    <div class="flex-shrink-0 w-10 h-10 bg-yellow-100 rounded-full flex items-center justify-center">
-                        <svg class="w-5 h-5 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
-                        </svg>
-                    </div>
-                    <div class="ml-4 flex-1">
-                        <p class="text-sm font-medium text-gray-900">Subscription renewed</p>
-                        <p class="text-sm text-gray-500">1 day ago</p>
-                    </div>
-                </div>
+                @endif
             </div>
         </div>
     </div>

@@ -92,6 +92,14 @@ class MemberController extends Controller
         // Count totals for stats
         $totalActivities = \App\Models\ActivityLog::where('user_id', $user->id)->count();
 
+        // Get recent activities for dashboard
+        $recentActivities = \App\Models\ActivityLog::where('user_id', $user->id)
+            ->with('user')
+            ->orderBy('date', 'desc')
+            ->orderBy('created_at', 'desc')
+            ->limit(5)
+            ->get();
+
         // Today's activity log state
         $todayActivity = $canTrackAttendance ? ActivityLog::todayForUser($user->id) : null;
         $checkedInToday = $canTrackAttendance ? (bool) ($todayActivity?->check_in_time) : false;
@@ -104,9 +112,10 @@ class MemberController extends Controller
             : null;
         
         return view('frontend.member.dashboard', compact(
-            'activeSubscription', 
+            'activeSubscription',
             'subscriptionPlans',
             'totalActivities',
+            'recentActivities',
             'checkedInToday',
             'checkedOutToday',
             'todayActivity',

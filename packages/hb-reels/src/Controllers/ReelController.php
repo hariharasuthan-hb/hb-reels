@@ -23,6 +23,19 @@ class ReelController
      */
     public function index()
     {
+        // Check if user is authenticated and has active subscription
+        if (!auth()->check()) {
+            return redirect()->route('login')->with('error', 'Please login to access the video generator.');
+        }
+
+        if (!auth()->user()->hasRole('member')) {
+            return redirect()->route('frontend.home')->with('error', 'Access denied. Member access required.');
+        }
+
+        if (!auth()->user()->hasActiveSubscription()) {
+            return redirect()->route('member.subscriptions')->with('error', 'You need an active subscription to generate videos. Please subscribe to continue.');
+        }
+
         return view('eventreel::index');
     }
 
@@ -31,6 +44,19 @@ class ReelController
      */
     public function generate(Request $request)
     {
+        // Check if user is authenticated and has active subscription
+        if (!auth()->check()) {
+            return redirect()->route('login')->with('error', 'Please login to access the video generator.');
+        }
+
+        if (!auth()->user()->hasRole('member')) {
+            return redirect()->route('frontend.home')->with('error', 'Access denied. Member access required.');
+        }
+
+        if (!auth()->user()->hasActiveSubscription()) {
+            return redirect()->route('member.subscriptions')->with('error', 'You need an active subscription to generate videos. Please subscribe to continue.');
+        }
+
         $request->validate([
             'flyer_image' => 'nullable|image|mimes:jpeg,jpg,png|max:10240',
             'event_text' => 'nullable|string|max:2000',
