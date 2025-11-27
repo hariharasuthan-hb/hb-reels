@@ -31,33 +31,54 @@
         ];
     };
 
-    if ($cmsTestimonialsSection && $cmsTestimonialsSection->background_image) {
-        $testimonialsBackgroundImage = \Illuminate\Support\Facades\Storage::url($cmsTestimonialsSection->background_image);
-    } else {
+    // Priority: background_video > background_image
+    $testimonialsBackgroundVideo = null;
+    $testimonialsBackgroundImage = null;
+
+    // Check testimonials section first
+    if ($cmsTestimonialsSection) {
+        if ($cmsTestimonialsSection->video_path && $cmsTestimonialsSection->video_is_background) {
+            $testimonialsBackgroundVideo = \Illuminate\Support\Facades\Storage::url($cmsTestimonialsSection->video_path);
+        } elseif ($cmsTestimonialsSection->background_image) {
+            $testimonialsBackgroundImage = \Illuminate\Support\Facades\Storage::url($cmsTestimonialsSection->background_image);
+        }
+    }
+
+    // If no background found in section, check all testimonials content
+    if (!$testimonialsBackgroundVideo && !$testimonialsBackgroundImage) {
         foreach ($cmsTestimonials as $testimonialItem) {
-            if ($testimonialItem->background_image) {
+            if ($testimonialItem->video_path && $testimonialItem->video_is_background && !$testimonialsBackgroundVideo) {
+                $testimonialsBackgroundVideo = \Illuminate\Support\Facades\Storage::url($testimonialItem->video_path);
+            } elseif ($testimonialItem->background_image && !$testimonialsBackgroundImage && !$testimonialsBackgroundVideo) {
                 $testimonialsBackgroundImage = \Illuminate\Support\Facades\Storage::url($testimonialItem->background_image);
-                break;
             }
         }
     }
 
     $sectionVideo = $cmsTestimonialsSection ? $resolveVideo($cmsTestimonialsSection->video_path ?? null) : null;
+    // Only show section if there's meaningful content
+    $hasContent = $testimonialsTitle || $testimonialsDescription || $sectionVideo || $cmsTestimonials->isNotEmpty();
 @endphp
-@if($cmsTestimonialsSection || $cmsTestimonials->isNotEmpty())
+@if($hasContent)
 @php
-    $testimonialsBgStyle = $testimonialsBackgroundImage 
+    $testimonialsBgStyle = $testimonialsBackgroundImage
         ? "background-image: url('{$testimonialsBackgroundImage}'); background-size: cover; background-position: center; background-attachment: fixed;"
         : '';
 @endphp
-<section id="testimonials" class="py-20 {{ $testimonialsBackgroundImage ? 'relative' : 'bg-gray-50' }}" style="{{ $testimonialsBgStyle }}">
-    @if($testimonialsBackgroundImage)
+<section id="testimonials" class="py-20 {{ $testimonialsBackgroundImage || $testimonialsBackgroundVideo ? 'relative' : 'bg-gray-50' }}" style="{{ $testimonialsBgStyle }}">
+    @if($testimonialsBackgroundVideo)
+        <video autoplay muted loop class="absolute inset-0 w-full h-full object-cover z-0">
+            <source src="{{ $testimonialsBackgroundVideo }}" type="video/mp4">
+            Your browser does not support the video tag.
+        </video>
+        <div class="absolute inset-0 bg-black bg-opacity-30 z-0"></div>
+    @elseif($testimonialsBackgroundImage)
         <div class="absolute inset-0 bg-black bg-opacity-40 z-0"></div>
     @endif
     <div class="container mx-auto px-4 relative z-10">
         <div class="text-center mb-12">
-            <h2 class="text-4xl font-bold mb-4 {{ $testimonialsBackgroundImage ? 'text-white' : 'text-gray-900' }}">{{ $testimonialsTitle }}</h2>
-            <p class="{{ $testimonialsBackgroundImage ? 'text-white' : 'text-gray-600' }} max-w-2xl mx-auto">
+            <h2 class="text-4xl font-bold mb-4 {{ $testimonialsBackgroundImage || $testimonialsBackgroundVideo ? 'text-white' : 'text-gray-900' }}" style="color: {{ $cmsTestimonialsSection->title_color ?? ($testimonialsBackgroundImage || $testimonialsBackgroundVideo ? '#ffffff' : '#111827') }};">{{ $testimonialsTitle }}</h2>
+            <p class="{{ $testimonialsBackgroundImage || $testimonialsBackgroundVideo ? 'text-white' : 'text-gray-600' }} max-w-2xl mx-auto" style="color: {{ $cmsTestimonialsSection->description_color ?? ($testimonialsBackgroundImage || $testimonialsBackgroundVideo ? '#ffffff' : '#4b5563') }};">
                 {!! $testimonialsDescription !!}
             </p>
         </div>
@@ -101,7 +122,7 @@
                             </div>
                         @endif
 
-                        <p class="text-gray-600 italic mb-4">
+                        <p class="text-gray-600 italic mb-4" style="color: {{ $cmsTestimonialsSection->content_color ?? '#4b5563' }};">
                             "{!! $testimonial->content ?? $testimonial->description ?? '' !!}"
                         </p>
                         @if($testimonial->extra_data && isset($testimonial->extra_data['rating']))

@@ -16,12 +16,14 @@
     @endif
     
     {{-- About Section --}}
-    @include('frontend.components.about', [
-        'landingPage' => $landingPage ?? null,
-        'cmsAbout' => $cmsAbout ?? null,
-        'cmsFeatures' => $cmsFeatures ?? collect()
-    ])
-    
+    @if(isset($cmsAbout) || isset($cmsFeatures) && $cmsFeatures->isNotEmpty() || (isset($landingPage) && $landingPage->about_title))
+        @include('frontend.components.about', [
+            'landingPage' => $landingPage ?? null,
+            'cmsAbout' => $cmsAbout ?? null,
+            'cmsFeatures' => $cmsFeatures ?? collect()
+        ])
+    @endif
+
     {{-- Services Section --}}
     @include('frontend.components.services', [
         'landingPage' => $landingPage ?? null,
@@ -29,13 +31,11 @@
         'cmsServices' => $cmsServices ?? collect()
     ])
     
-    {{-- Testimonials Section (if CMS content exists) --}}
-    @if(isset($cmsTestimonials) && $cmsTestimonials->isNotEmpty())
-        @include('frontend.components.testimonials', [
-            'cmsTestimonialsSection' => $cmsTestimonialsSection ?? null,
-            'cmsTestimonials' => $cmsTestimonials
-        ])
-    @endif
+    {{-- Testimonials Section --}}
+    @include('frontend.components.testimonials', [
+        'cmsTestimonialsSection' => $cmsTestimonialsSection ?? null,
+        'cmsTestimonials' => $cmsTestimonials ?? collect()
+    ])
     
     {{-- Contact Section --}}
     @include('frontend.components.contact-form')

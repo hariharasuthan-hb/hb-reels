@@ -12,20 +12,31 @@
         ? ($cmsServicesSection->description ?? $cmsServicesSection->content) 
         : ($landingPage->services_description ?? 'Choose from our range of fitness programs and services');
     
-    // Check for background image: First check services-section, then check all services content
+    // Check for background video/image: First check services-section, then check all services content
+    // Priority: background_video > background_image
+    $servicesBackgroundVideo = null;
     $servicesBackgroundImage = null;
-    if ($cmsServicesSection && $cmsServicesSection->background_image) {
-        $servicesBackgroundImage = \Illuminate\Support\Facades\Storage::url($cmsServicesSection->background_image);
-    } else {
-        // Check all services content (including the section if it's in the collection)
+
+    // Check services section first
+    if ($cmsServicesSection) {
+        if ($cmsServicesSection->video_path && $cmsServicesSection->video_is_background) {
+            $servicesBackgroundVideo = \Illuminate\Support\Facades\Storage::url($cmsServicesSection->video_path);
+        } elseif ($cmsServicesSection->background_image) {
+            $servicesBackgroundImage = \Illuminate\Support\Facades\Storage::url($cmsServicesSection->background_image);
+        }
+    }
+
+    // If no background found in section, check all services content
+    if (!$servicesBackgroundVideo && !$servicesBackgroundImage) {
         $cmsContentRepo = app(\App\Repositories\Interfaces\CmsContentRepositoryInterface::class);
         $allServicesForBg = $cmsContentRepo->getFrontendContent('services');
-        
-        // Find first service with background_image
+
+        // Find first service with background_video, then background_image
         foreach ($allServicesForBg as $serviceItem) {
-            if ($serviceItem->background_image) {
+            if ($serviceItem->video_path && $serviceItem->video_is_background && !$servicesBackgroundVideo) {
+                $servicesBackgroundVideo = \Illuminate\Support\Facades\Storage::url($serviceItem->video_path);
+            } elseif ($serviceItem->background_image && !$servicesBackgroundImage && !$servicesBackgroundVideo) {
                 $servicesBackgroundImage = \Illuminate\Support\Facades\Storage::url($serviceItem->background_image);
-                break;
             }
         }
     }
@@ -56,18 +67,24 @@
     }
 @endphp
 @php
-    $servicesBgStyle = $servicesBackgroundImage 
+    $servicesBgStyle = $servicesBackgroundImage
         ? "background-image: url('{$servicesBackgroundImage}'); background-size: cover; background-position: center; background-repeat: no-repeat; background-attachment: fixed;"
         : '';
 @endphp
-<section id="services" class="py-20 {{ $servicesBackgroundImage ? 'relative min-h-[600px]' : '' }}" style="{{ $servicesBgStyle }}">
-    @if($servicesBackgroundImage)
+<section id="services" class="py-20 {{ $servicesBackgroundImage || $servicesBackgroundVideo ? 'relative min-h-[600px]' : '' }}" style="{{ $servicesBgStyle }}">
+    @if($servicesBackgroundVideo)
+        <video autoplay muted loop class="absolute inset-0 w-full h-full object-cover z-0">
+            <source src="{{ $servicesBackgroundVideo }}" type="video/mp4">
+            Your browser does not support the video tag.
+        </video>
+        <div class="absolute inset-0 bg-black bg-opacity-30 z-0"></div>
+    @elseif($servicesBackgroundImage)
         <div class="absolute inset-0 bg-black bg-opacity-40 z-0"></div>
     @endif
     <div class="container mx-auto px-4 relative z-10">
         <div class="text-center mb-12">
-            <h2 class="text-4xl font-bold mb-4 {{ $servicesBackgroundImage ? 'text-white' : 'text-gray-900' }}">{{ $servicesTitle }}</h2>
-            <p class="{{ $servicesBackgroundImage ? 'text-white' : 'text-gray-600' }} max-w-2xl mx-auto">
+            <h2 class="text-4xl font-bold mb-4 {{ $servicesBackgroundImage || $servicesBackgroundVideo ? 'text-white' : 'text-gray-900' }}" style="color: {{ $cmsServicesSection->title_color ?? ($servicesBackgroundImage || $servicesBackgroundVideo ? '#ffffff' : '#111827') }};">{{ $servicesTitle }}</h2>
+            <p class="{{ $servicesBackgroundImage || $servicesBackgroundVideo ? 'text-white' : 'text-gray-600' }} max-w-2xl mx-auto" style="color: {{ $cmsServicesSection->description_color ?? ($servicesBackgroundImage || $servicesBackgroundVideo ? '#ffffff' : '#4b5563') }};">
                 {!! $servicesDescription !!}
             </p>
         </div>
@@ -77,8 +94,8 @@
                     @if(isset($service['image']) && $service['image'])
                         <img src="{{ $service['image'] }}" alt="{{ $service['title'] ?? 'Service' }}" class="w-full h-48 object-cover rounded-lg mb-4">
                     @endif
-                    <h3 class="text-2xl font-semibold mb-3">{{ $service['title'] ?? 'Service' }}</h3>
-                    <p class="text-gray-600 mb-4">{!! $service['description'] ?? '' !!}</p>
+                    <h3 class="text-2xl font-semibold mb-3" style="color: {{ $cmsServicesSection->title_color ?? '#1f2937' }};">{{ $service['title'] ?? 'Service' }}</h3>
+                    <p class="text-gray-600 mb-4" style="color: {{ $cmsServicesSection->content_color ?? '#4b5563' }};">{!! $service['description'] ?? '' !!}</p>
                     <a href="{{ $service['link'] ?? '#contact' }}" class="text-blue-600 font-semibold">
                         {{ $service['link_text'] ?? 'Learn More' }} →
                     </a>

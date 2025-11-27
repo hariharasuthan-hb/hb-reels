@@ -164,12 +164,23 @@
                     <label for="video" class="block text-sm font-medium text-gray-700 mb-2">
                         {{ $content->video_path ? 'Replace Video' : 'Video (optional)' }}
                     </label>
-                    <input type="file" 
-                           name="video" 
-                           id="video" 
+                    <input type="file"
+                           name="video"
+                           id="video"
                            accept="video/mp4,video/quicktime,video/x-msvideo,video/x-ms-wmv"
                            class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                    <p class="mt-1 text-sm text-gray-500">Max size: 50MB. Formats: MP4, MOV, AVI, WMV.</p>
+                    <div class="mt-2 flex items-center">
+                        <input type="checkbox"
+                               name="video_is_background"
+                               id="video_is_background"
+                               value="1"
+                               {{ old('video_is_background', $content->video_is_background ?? false) ? 'checked' : '' }}
+                               class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
+                        <label for="video_is_background" class="ml-2 text-sm text-gray-700 font-medium">
+                            Set as background video for homepage section
+                        </label>
+                    </div>
+                    <p class="mt-1 text-sm text-gray-500">Max size: 50MB. Formats: MP4, MOV, AVI, WMV. When checked, video will be used as background instead of content.</p>
                 </div>
 
                 {{-- Link --}}
@@ -200,15 +211,79 @@
 
                 {{-- Status --}}
                 <div class="flex items-center">
-                    <input type="checkbox" 
-                           name="is_active" 
-                           id="is_active" 
+                    <input type="checkbox"
+                           name="is_active"
+                           id="is_active"
                            value="1"
                            {{ old('is_active', $content->is_active) ? 'checked' : '' }}
                            class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded">
                     <label for="is_active" class="ml-2 block text-sm text-gray-700">
                         Active
                     </label>
+                </div>
+
+                {{-- Text Colors --}}
+                <div class="bg-gray-50 p-4 rounded-lg">
+                    <h4 class="text-sm font-medium text-gray-700 mb-3">Text Colors (Optional)</h4>
+                    <div class="space-y-3">
+                        {{-- Title Color --}}
+                        <div>
+                            <label for="title_color" class="block text-sm text-gray-600 mb-1">
+                                Title Color
+                            </label>
+                            <div class="flex items-center space-x-2">
+                                <input type="color"
+                                       name="title_color"
+                                       id="title_color"
+                                       value="{{ old('title_color', $content->title_color ?? '#000000') }}"
+                                       class="w-12 h-10 border border-gray-300 rounded cursor-pointer">
+                                <input type="text"
+                                       value="{{ old('title_color', $content->title_color ?? '#000000') }}"
+                                       readonly
+                                       class="flex-1 px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-sm font-mono">
+                                <button type="button" onclick="document.getElementById('title_color').value='#000000'; document.querySelector('[name=title_color]').nextElementSibling.value='#000000';" class="text-xs text-gray-500 hover:text-gray-700">Reset</button>
+                            </div>
+                        </div>
+
+                        {{-- Description Color --}}
+                        <div>
+                            <label for="description_color" class="block text-sm text-gray-600 mb-1">
+                                Description Color
+                            </label>
+                            <div class="flex items-center space-x-2">
+                                <input type="color"
+                                       name="description_color"
+                                       id="description_color"
+                                       value="{{ old('description_color', $content->description_color ?? '#666666') }}"
+                                       class="w-12 h-10 border border-gray-300 rounded cursor-pointer">
+                                <input type="text"
+                                       value="{{ old('description_color', $content->description_color ?? '#666666') }}"
+                                       readonly
+                                       class="flex-1 px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-sm font-mono">
+                                <button type="button" onclick="document.getElementById('description_color').value='#666666'; document.querySelector('[name=description_color]').nextElementSibling.value='#666666';" class="text-xs text-gray-500 hover:text-gray-700">Reset</button>
+                            </div>
+                        </div>
+
+                        {{-- Content Color --}}
+                        <div>
+                            <label for="content_color" class="block text-sm text-gray-600 mb-1">
+                                Content Color
+                            </label>
+                            <div class="flex items-center space-x-2">
+                                <input type="color"
+                                       name="content_color"
+                                       id="content_color"
+                                       value="{{ old('content_color', $content->content_color ?? '#333333') }}"
+                                       class="w-12 h-10 border border-gray-300 rounded cursor-pointer">
+                                <input type="text"
+                                       value="{{ old('content_color', $content->content_color ?? '#333333') }}"
+                                       readonly
+                                       class="flex-1 px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-sm font-mono">
+                                <button type="button" onclick="document.getElementById('content_color').value='#333333'; document.querySelector('[name=content_color]').nextElementSibling.value='#333333';" class="text-xs text-gray-500 hover:text-gray-700">Reset</button>
+                            </div>
+                        </div>
+                    </div>
+                    <p class="mt-2 text-xs text-gray-500">Customize text colors for this content section. Leave empty to use default colors.</p>
                 </div>
             </div>
 
@@ -253,6 +328,33 @@
             </button>
         </div>
     </form>
+
+    {{-- Color Picker JavaScript --}}
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Sync color pickers with text inputs
+            const colorInputs = ['title_color', 'description_color', 'content_color'];
+
+            colorInputs.forEach(function(colorName) {
+                const colorPicker = document.getElementById(colorName);
+                const textInput = colorPicker.nextElementSibling;
+
+                if (colorPicker && textInput) {
+                    // Update text input when color picker changes
+                    colorPicker.addEventListener('input', function() {
+                        textInput.value = this.value;
+                    });
+
+                    // Update color picker when text input changes (for form reset)
+                    textInput.addEventListener('input', function() {
+                        if (this.value.match(/^#[a-fA-F0-9]{6}$/)) {
+                            colorPicker.value = this.value;
+                        }
+                    });
+                }
+            });
+        });
+    </script>
 </div>
 @endsection
 

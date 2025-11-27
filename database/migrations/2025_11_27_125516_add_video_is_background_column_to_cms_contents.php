@@ -12,7 +12,9 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('cms_contents', function (Blueprint $table) {
-            $table->string('video_path')->nullable()->after('background_image');
+            if (!Schema::hasColumn('cms_contents', 'video_is_background')) {
+                $table->boolean('video_is_background')->default(false)->after('video_path');
+            }
         });
     }
 
@@ -22,7 +24,9 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('cms_contents', function (Blueprint $table) {
-            $table->dropColumn('video_path');
+            if (Schema::hasColumn('cms_contents', 'video_is_background')) {
+                $table->dropColumn('video_is_background');
+            }
         });
     }
 };

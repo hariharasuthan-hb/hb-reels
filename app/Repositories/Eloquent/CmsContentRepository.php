@@ -19,6 +19,7 @@ class CmsContentRepository extends BaseRepository implements CmsContentRepositor
     {
         return $this->model->where('type', $type)
             ->where('is_active', true)
+            ->whereNull('deleted_at')
             ->orderBy('order', 'asc')
             ->get();
     }
@@ -30,6 +31,7 @@ class CmsContentRepository extends BaseRepository implements CmsContentRepositor
     {
         return $this->model->where('key', $key)
             ->where('is_active', true)
+            ->whereNull('deleted_at')
             ->first();
     }
 
@@ -38,7 +40,8 @@ class CmsContentRepository extends BaseRepository implements CmsContentRepositor
      */
     public function getFrontendContent(string $type = null): \Illuminate\Support\Collection
     {
-        $query = $this->model->where('is_active', true);
+        $query = $this->model->where('is_active', true)
+            ->whereNull('deleted_at');
 
         if ($type) {
             $query->where('type', $type);
