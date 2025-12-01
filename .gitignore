@@ -15,9 +15,17 @@
 /node_modules
 /public/build
 /public/hot
-/public/storage
-/storage/*.key
-/storage/pail
+/storage/
+# Allow public/storage only
+!/public/storage/
+# Ignore all inside it
+/public/storage/*
+# Whitelist required folders
+!/public/storage/banner/
+!/public/storage/site-settings/
+!/public/storage/cms/
+!/public/storage/fonts/
+!/public/storage/subscriptions/
 /vendor
 Homestead.json
 Homestead.yaml
