@@ -15,18 +15,22 @@
 /node_modules
 /public/build
 /public/hot
-/storage/
-# Allow public/storage only
-!/public/storage/
-# Ignore all inside it
+
+# Ignore public/storage completely
 /public/storage/*
-# Whitelist required folders
+
+# Allow specific folders
 !/public/storage/banner/
 !/public/storage/site-settings/
 !/public/storage/cms/
 !/public/storage/fonts/
 !/public/storage/subscriptions/
+
+# Ignore sensitive storage files
+/storage/*.key
+/storage/pail
 /vendor
+
 Homestead.json
 Homestead.yaml
 Thumbs.db
