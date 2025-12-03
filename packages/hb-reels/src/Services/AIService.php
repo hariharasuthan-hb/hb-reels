@@ -35,6 +35,26 @@ class AIService
         $ollamaUrl = config('eventreel.ollama_url', 'http://localhost:11434');
         $model = config('eventreel.ollama_model', 'mistral');
 
+        // Check if this is a product description about HBPartner.ai Event Reel Generator
+        $textLower = strtolower($text);
+        if ((strpos($textLower, 'ai-powered') !== false ||
+             strpos($textLower, 'ai powered') !== false ||
+             strpos($textLower, 'event reel') !== false ||
+             strpos($textLower, 'event-reel') !== false ||
+             strpos($textLower, 'reel generator') !== false) &&
+            (strpos($textLower, 'creates pro reels') !== false ||
+             strpos($textLower, 'creates professional') !== false ||
+             strpos($textLower, 'flyers or details') !== false ||
+             strpos($textLower, 'identifies event') !== false ||
+             strpos($textLower, 'polished videos') !== false ||
+             strpos($textLower, 'animations') !== false ||
+             strpos($textLower, 'saves time') !== false ||
+             strpos($textLower, 'boosts engagement') !== false)) {
+
+            // This is a product description - create engaging promotional content
+            $text = "Discover the revolutionary AI-powered Event Reel Generator that transforms simple event flyers and text into stunning professional video reels! Our advanced AI automatically identifies event details like names, dates, venues, and key highlights. Create polished videos with smooth animations, perfect background music, and cinematic effects. Save hours of editing time while dramatically boosting audience engagement with professional-quality content that brings every special moment to life!";
+        }
+
         // Enhanced AI analysis for better content understanding and creative caption generation
         $prompt = "You are a professional video content creator. Transform the provided text into engaging video content.
 

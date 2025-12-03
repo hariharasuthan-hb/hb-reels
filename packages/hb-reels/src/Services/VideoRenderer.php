@@ -228,11 +228,11 @@ class VideoRenderer
             }
 
             if ($flyerPath) {
-                $yStart = intval(($height - $totalTextHeight) / 2) + 50;
+                $yStart = intval(($height - $totalTextHeight) / 2) + 60;
             } else {
                 $yStart = intval(($height - $totalTextHeight) / 2);
-                if ($yStart < 200) {
-                    $yStart = 200;
+                if ($yStart < 210) {
+                    $yStart = 210;
                 }
             }
 
@@ -266,9 +266,16 @@ class VideoRenderer
 
                 \Log::info("Processing line {$processedLineIndex} with drawtext", ['text' => $line, 'y_position' => $currentY]);
 
-                // Escape special characters for FFmpeg
-                $safe = str_replace("'", "", $line);
+                // Escape special characters for FFmpeg drawtext
+                $safe = $line;
+                // Remove single quotes as they can break the filter
+                $safe = str_replace("'", "", $safe);
+                // Escape colons with backslash
                 $safe = str_replace(':', '\\:', $safe);
+                // Escape other special characters that can cause issues
+                $safe = str_replace(['[', ']', ';', '\\'], ['\\[', '\\]', '\\;', '\\\\'], $safe);
+                // Handle newlines properly
+                $safe = str_replace(["\r\n", "\r", "\n"], '|', $safe);
 
                 // Wrap long text manually (FFmpeg doesn't have auto text wrapping)
                 // Use higher limit for Unicode text (Tamil, etc.) since characters take more bytes
@@ -286,23 +293,26 @@ class VideoRenderer
                 // Draw text with shadow and border for maximum visibility on any background
                 if ($fontFile && file_exists($fontFile)) {
                     $filters[] = sprintf(
-                        "%sdrawtext=fontfile=%s:text='%s':fontsize=%d:fontcolor=white:" .
+                        "%sdrawtext=fontfile='%s':text='%s':fontsize=%d:fontcolor=white:" .
                         "x=(w-text_w)/2:y=%d:" .
                         "borderw=3:bordercolor=black:" .
-                        "shadowcolor=black@0.8:shadowx=2:shadowy=2%s",
+                        "shadowcolor=black@0.8:shadowx=2:shadowy=2:" .
+                        "box=0:boxcolor=black@0.5%s",
                         $inputLabel,
-                        escapeshellarg($fontFile),
+                        $fontFile, // Don't use escapeshellarg here as it adds quotes
                         $safe,
                         $fontSize,
                         $currentY,
                         $outputLabel
                     );
                 } else {
+                    // Fallback to system font with more robust settings
                     $filters[] = sprintf(
-                        "%sdrawtext=text='%s':fontsize=%d:fontcolor=white:" .
+                        "%sdrawtext=font='Arial':text='%s':fontsize=%d:fontcolor=white:" .
                         "x=(w-text_w)/2:y=%d:" .
                         "borderw=3:bordercolor=black:" .
-                        "shadowcolor=black@0.8:shadowx=2:shadowy=2%s",
+                        "shadowcolor=black@0.8:shadowx=2:shadowy=2:" .
+                        "box=0:boxcolor=black@0.5%s",
                         $inputLabel,
                         $safe,
                         $fontSize,
@@ -731,8 +741,8 @@ class VideoRenderer
             $lines[] = $currentLine;
         }
 
-        // Use literal \n for FFmpeg drawtext (will be rendered as newline)
-        return implode('\\n', $lines);
+        // Use pipe character for line breaks (FFmpeg drawtext compatible)
+        return implode('|', $lines);
     }
 }
 

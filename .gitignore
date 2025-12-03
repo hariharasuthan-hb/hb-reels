@@ -16,15 +16,25 @@
 /public/build
 /public/hot
 
-# Ignore public/storage completely
+# Ignore public/storage content
 /public/storage/*
 
-# Allow specific folders
+# But DO NOT ignore the main folder itself
+!/public/storage/
+
+# Allow specific folders inside public/storage
 !/public/storage/banner/
 !/public/storage/site-settings/
 !/public/storage/cms/
 !/public/storage/fonts/
 !/public/storage/subscriptions/
+
+# To force add these directories when needed:
+# git add -f public/storage/banner/
+# git add -f public/storage/site-settings/
+# git add -f public/storage/cms/
+# git add -f public/storage/fonts/
+# git add -f public/storage/subscriptions/
 
 # Ignore sensitive storage files
 /storage/*.key

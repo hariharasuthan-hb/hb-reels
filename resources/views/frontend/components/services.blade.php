@@ -17,7 +17,7 @@
     $servicesBackgroundVideo = null;
     $servicesBackgroundImage = null;
 
-    // Check services section first
+    // Check services section first - only show background video if checkbox is checked
     if ($cmsServicesSection) {
         if ($cmsServicesSection->video_path && $cmsServicesSection->video_is_background) {
             $servicesBackgroundVideo = \Illuminate\Support\Facades\Storage::url($cmsServicesSection->video_path);
@@ -49,6 +49,7 @@
                 'title' => $service->title,
                 'description' => $service->description ?? $service->content ?? '',
                 'image' => $service->image ? \Illuminate\Support\Facades\Storage::url($service->image) : null,
+                'video' => $service->video_path ? \Illuminate\Support\Facades\Storage::url($service->video_path) : null,
                 'link' => $service->link ?? '#contact',
                 'link_text' => $service->link_text ?? 'Learn More',
                 'title_color' => $service->title_color,
@@ -93,7 +94,12 @@
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             @foreach($services as $service)
                 <div class="bg-white rounded-lg shadow-lg p-6 hover:shadow-xl transition">
-                    @if(isset($service['image']) && $service['image'])
+                    @if(isset($service['video']) && $service['video'])
+                        <video class="w-full h-48 object-cover rounded-lg mb-4" controls>
+                            <source src="{{ $service['video'] }}" type="video/mp4">
+                            Your browser does not support the video tag.
+                        </video>
+                    @elseif(isset($service['image']) && $service['image'])
                         <img src="{{ $service['image'] }}" alt="{{ $service['title'] ?? 'Service' }}" class="w-full h-48 object-cover rounded-lg mb-4">
                     @endif
                     <h3 class="text-2xl font-semibold mb-3" style="color: {{ $service['title_color'] ?? $cmsServicesSection->title_color ?? '#1f2937' }};">{{ $service['title'] ?? 'Service' }}</h3>
