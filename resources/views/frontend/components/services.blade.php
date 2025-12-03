@@ -51,18 +51,20 @@
                 'image' => $service->image ? \Illuminate\Support\Facades\Storage::url($service->image) : null,
                 'link' => $service->link ?? '#contact',
                 'link_text' => $service->link_text ?? 'Learn More',
+                'title_color' => $service->title_color,
+                'content_color' => $service->content_color,
             ];
         }
     } elseif ($landingPage && $landingPage->services) {
         $services = $landingPage->services;
     } else {
         $services = [
-            ['title' => 'Personal Training', 'description' => 'One-on-one training sessions with expert trainers'],
-            ['title' => 'Group Classes', 'description' => 'Join group fitness classes for motivation'],
-            ['title' => 'Wellness Coaching', 'description' => 'Holistic guidance for balanced habits'],
-            ['title' => 'Cardio Zone', 'description' => 'State-of-the-art cardio equipment'],
-            ['title' => 'Weight Training', 'description' => 'Comprehensive weight training facilities'],
-            ['title' => 'Yoga & Meditation', 'description' => 'Relax and rejuvenate with yoga classes'],
+            ['title' => 'Personal Training', 'description' => 'One-on-one training sessions with expert trainers', 'title_color' => null, 'content_color' => null],
+            ['title' => 'Group Classes', 'description' => 'Join group fitness classes for motivation', 'title_color' => null, 'content_color' => null],
+            ['title' => 'Wellness Coaching', 'description' => 'Holistic guidance for balanced habits', 'title_color' => null, 'content_color' => null],
+            ['title' => 'Cardio Zone', 'description' => 'State-of-the-art cardio equipment', 'title_color' => null, 'content_color' => null],
+            ['title' => 'Weight Training', 'description' => 'Comprehensive weight training facilities', 'title_color' => null, 'content_color' => null],
+            ['title' => 'Yoga & Meditation', 'description' => 'Relax and rejuvenate with yoga classes', 'title_color' => null, 'content_color' => null],
         ];
     }
 @endphp
@@ -94,8 +96,8 @@
                     @if(isset($service['image']) && $service['image'])
                         <img src="{{ $service['image'] }}" alt="{{ $service['title'] ?? 'Service' }}" class="w-full h-48 object-cover rounded-lg mb-4">
                     @endif
-                    <h3 class="text-2xl font-semibold mb-3" style="color: {{ $cmsServicesSection->title_color ?? '#1f2937' }};">{{ $service['title'] ?? 'Service' }}</h3>
-                    <p class="text-gray-600 mb-4" style="color: {{ $cmsServicesSection->content_color ?? '#4b5563' }};">{!! $service['description'] ?? '' !!}</p>
+                    <h3 class="text-2xl font-semibold mb-3" style="color: {{ $service['title_color'] ?? $cmsServicesSection->title_color ?? '#1f2937' }};">{{ $service['title'] ?? 'Service' }}</h3>
+                    <p class="text-gray-600 mb-4" style="color: {{ $service['content_color'] ?? $cmsServicesSection->content_color ?? '#4b5563' }};">{!! $service['description'] ?? '' !!}</p>
                     <a href="{{ $service['link'] ?? '#contact' }}" class="text-blue-600 font-semibold">
                         {{ $service['link_text'] ?? 'Learn More' }} →
                     </a>

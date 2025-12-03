@@ -28,11 +28,12 @@ class ReelController
             return redirect()->route('login')->with('error', 'Please login to access the video generator.');
         }
 
-        if (!auth()->user()->hasRole('member')) {
-            return redirect()->route('frontend.home')->with('error', 'Access denied. Member access required.');
+        if (!auth()->user()->hasRole('member') && !auth()->user()->hasRole('admin')) {
+            return redirect()->route('frontend.home')->with('error', 'Access denied. Member or admin access required.');
         }
 
-        if (!auth()->user()->hasActiveSubscription()) {
+        // Skip subscription check for admins
+        if (!auth()->user()->hasRole('admin') && !auth()->user()->hasActiveSubscription()) {
             return redirect()->route('member.subscriptions')->with('error', 'You need an active subscription to generate videos. Please subscribe to continue.');
         }
 
@@ -49,11 +50,12 @@ class ReelController
             return redirect()->route('login')->with('error', 'Please login to access the video generator.');
         }
 
-        if (!auth()->user()->hasRole('member')) {
-            return redirect()->route('frontend.home')->with('error', 'Access denied. Member access required.');
+        if (!auth()->user()->hasRole('member') && !auth()->user()->hasRole('admin')) {
+            return redirect()->route('frontend.home')->with('error', 'Access denied. Member or admin access required.');
         }
 
-        if (!auth()->user()->hasActiveSubscription()) {
+        // Skip subscription check for admins
+        if (!auth()->user()->hasRole('admin') && !auth()->user()->hasActiveSubscription()) {
             return redirect()->route('member.subscriptions')->with('error', 'You need an active subscription to generate videos. Please subscribe to continue.');
         }
 
