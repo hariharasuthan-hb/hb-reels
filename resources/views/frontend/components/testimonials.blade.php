@@ -65,7 +65,7 @@
         ? "background-image: url('{$testimonialsBackgroundImage}'); background-size: cover; background-position: center; background-attachment: fixed;"
         : '';
 @endphp
-<section id="testimonials" class="py-20 {{ $testimonialsBackgroundImage || $testimonialsBackgroundVideo ? 'relative' : 'bg-gray-50' }}" style="{{ $testimonialsBgStyle }}">
+<section style="display: none;" id="testimonials" class="py-20 {{ $testimonialsBackgroundImage || $testimonialsBackgroundVideo ? 'relative' : 'bg-gray-50' }}" style="{{ $testimonialsBgStyle }}">
     @if($testimonialsBackgroundVideo)
         <video autoplay muted loop class="absolute inset-0 w-full h-full object-cover z-0">
             <source src="{{ $testimonialsBackgroundVideo }}" type="video/mp4">

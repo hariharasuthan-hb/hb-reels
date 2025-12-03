@@ -79,7 +79,7 @@
                 </div>
                 <div class="order-1 lg:order-2">
                     <div class="space-y-6">
-                        <h3 class="text-3xl font-bold {{ $aboutBackgroundImage || $aboutBackgroundVideo ? 'text-white' : 'text-gray-900' }}" style="color: {{ $cmsAbout->title_color ?? ($aboutBackgroundImage || $aboutBackgroundVideo ? '#ffffff' : '#111827') }};">Why Choose Us?</h3>
+                        <h3 class="text-6xl font-bold {{ $aboutBackgroundImage || $aboutBackgroundVideo ? 'text-white' : 'text-gray-900' }}" style="color: {{ $cmsAbout->title_color ?? ($aboutBackgroundImage || $aboutBackgroundVideo ? '#ffffff' : '#111827') }};">Why Choose Us?</h3>
                         @if($aboutDescription)
                             <p class="{{ $aboutBackgroundImage || $aboutBackgroundVideo ? 'text-white' : 'text-gray-700' }} text-lg leading-relaxed" style="color: {{ $cmsAbout->description_color ?? ($aboutBackgroundImage || $aboutBackgroundVideo ? '#ffffff' : '#374151') }};">
                                 {!! $aboutDescription !!}
@@ -96,7 +96,7 @@
             </div>
         @elseif($aboutDescription)
             {{-- Layout without Image - Centered Description --}}
-            <div class="max-w-3xl mx-auto mb-12">
+            <div class="max-w-6xl mx-auto mb-12">
                 <p class="{{ $aboutBackgroundImage || $aboutBackgroundVideo ? 'text-white' : 'text-gray-700' }} text-lg leading-relaxed text-center" style="color: {{ $cmsAbout->description_color ?? ($aboutBackgroundImage || $aboutBackgroundVideo ? '#ffffff' : '#374151') }};">
                     {!! $aboutDescription !!}
                 </p>
