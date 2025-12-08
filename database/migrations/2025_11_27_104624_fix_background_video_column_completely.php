@@ -11,10 +11,10 @@ return new class extends Migration
      */
     public function up(): void
     {
-        // Drop the existing unique constraint on the key column
-        // This allows soft deleted records to have the same key
         Schema::table('cms_contents', function (Blueprint $table) {
-            $table->dropUnique('key');
+            if (!Schema::hasColumn('cms_contents', 'background_video')) {
+                $table->string('background_video')->nullable()->after('video_path');
+            }
         });
     }
 
@@ -23,9 +23,10 @@ return new class extends Migration
      */
     public function down(): void
     {
-        // Restore the unique constraint on the key column
         Schema::table('cms_contents', function (Blueprint $table) {
-            $table->unique('key');
+            if (Schema::hasColumn('cms_contents', 'background_video')) {
+                $table->dropColumn('background_video');
+            }
         });
     }
 };
