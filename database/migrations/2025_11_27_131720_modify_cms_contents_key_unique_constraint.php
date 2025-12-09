@@ -14,7 +14,7 @@ return new class extends Migration
         // Drop the existing unique constraint on the key column
         // This allows soft deleted records to have the same key
         Schema::table('cms_contents', function (Blueprint $table) {
-            $table->dropUnique('key');
+            $table->dropUnique(['key']);
         });
     }
 
