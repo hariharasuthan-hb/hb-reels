@@ -67,26 +67,33 @@ class MemberController extends Controller
     public function dashboard(): View
     {
         $user = auth()->user();
-        
-        // Check if user has an active subscription
-        $activeSubscription = $user->subscriptions()
-            ->with('subscriptionPlan')
-            ->whereIn('status', ['active', 'trialing'])
-            ->where(function ($query) {
-                $query->whereNull('next_billing_at')
-                      ->orWhere('next_billing_at', '>=', now());
-            })
-            ->first();
-        
-        // Get active subscription plans if user has no active subscription
+
+        // Check if subscriptions are enabled
+        $subscriptionsEnabled = subscriptions_enabled();
+
+        // Check if user has an active subscription (only if subscriptions are enabled)
+        $activeSubscription = null;
         $subscriptionPlans = null;
-        if (!$activeSubscription) {
-            $subscriptionPlans = SubscriptionPlan::active()
-                ->orderBy('price', 'asc')
-                ->get();
+
+        if ($subscriptionsEnabled) {
+            $activeSubscription = $user->subscriptions()
+                ->with('subscriptionPlan')
+                ->whereIn('status', ['active', 'trialing'])
+                ->where(function ($query) {
+                    $query->whereNull('next_billing_at')
+                          ->orWhere('next_billing_at', '>=', now());
+                })
+                ->first();
+
+            // Get active subscription plans if user has no active subscription
+            if (!$activeSubscription) {
+                $subscriptionPlans = SubscriptionPlan::active()
+                    ->orderBy('price', 'asc')
+                    ->get();
+            }
         }
-        
-        $hasActiveSubscription = (bool) $activeSubscription;
+
+        $hasActiveSubscription = $subscriptionsEnabled ? (bool) $activeSubscription : true; // If subscriptions disabled, consider user as having access
         $canTrackAttendance = $hasActiveSubscription;
         
         // Count totals for stats
@@ -289,20 +296,23 @@ class MemberController extends Controller
         $user = auth()->user();
         $today = now()->toDateString();
 
-        // Ensure user has active subscription
-        $hasActiveSubscription = $user->subscriptions()
-            ->whereIn('status', ['active', 'trialing'])
-            ->where(function ($query) {
-                $query->whereNull('next_billing_at')
-                    ->orWhere('next_billing_at', '>=', now());
-            })
-            ->exists();
+        // Check if subscriptions are required
+        if (subscriptions_enabled()) {
+            // Ensure user has active subscription
+            $hasActiveSubscription = $user->subscriptions()
+                ->whereIn('status', ['active', 'trialing'])
+                ->where(function ($query) {
+                    $query->whereNull('next_billing_at')
+                        ->orWhere('next_billing_at', '>=', now());
+                })
+                ->exists();
 
-        if (!$hasActiveSubscription) {
-            return response()->json([
-                'success' => false,
-                'message' => 'You need an active subscription to check in.',
-            ], 403);
+            if (!$hasActiveSubscription) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'You need an active subscription to check in.',
+                ], 403);
+            }
         }
         
         // Check if already checked in today
@@ -342,19 +352,22 @@ class MemberController extends Controller
     {
         $user = auth()->user();
 
-        $hasActiveSubscription = $user->subscriptions()
-            ->whereIn('status', ['active', 'trialing'])
-            ->where(function ($query) {
-                $query->whereNull('next_billing_at')
-                    ->orWhere('next_billing_at', '>=', now());
-            })
-            ->exists();
+        // Check if subscriptions are required
+        if (subscriptions_enabled()) {
+            $hasActiveSubscription = $user->subscriptions()
+                ->whereIn('status', ['active', 'trialing'])
+                ->where(function ($query) {
+                    $query->whereNull('next_billing_at')
+                        ->orWhere('next_billing_at', '>=', now());
+                })
+                ->exists();
 
-        if (!$hasActiveSubscription) {
-            return response()->json([
-                'success' => false,
-                'message' => 'You need an active subscription to check out.',
-            ], 403);
+            if (!$hasActiveSubscription) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'You need an active subscription to check out.',
+                ], 403);
+            }
         }
 
         $todayActivity = ActivityLog::todayForUser($user->id);

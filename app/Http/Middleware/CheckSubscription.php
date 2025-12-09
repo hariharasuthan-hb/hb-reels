@@ -31,6 +31,11 @@ class CheckSubscription
             return $next($request);
         }
 
+        // If subscriptions are disabled, allow access
+        if (!config('app.enable_subscription', env('ENABLE_SUBSCRIPTION', false))) {
+            return $next($request);
+        }
+
         // Check if user account is active
         if (!$user->isActive()) {
             return redirect()->back()

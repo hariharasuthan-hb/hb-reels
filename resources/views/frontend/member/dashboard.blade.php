@@ -1,6 +1,9 @@
 @extends('frontend.layouts.app')
 
-@php use Illuminate\Support\Facades\Storage; @endphp
+@php
+    use Illuminate\Support\Facades\Storage;
+    $subscriptionsEnabled = subscriptions_enabled();
+@endphp
 
 @section('content')
 <div class="min-h-screen bg-gray-50 py-8">
@@ -13,7 +16,7 @@
                     <p class="mt-2 text-gray-600">Welcome back! Here's your overview.</p>
                 </div>
                 <div class="flex flex-col md:flex-row md:items-center gap-3">
-                    @if($activeSubscription)
+                    @if(!$subscriptionsEnabled || $activeSubscription || $hasActiveSubscription)
                         <a href="{{ route('eventreel.index') }}" class="px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors font-semibold flex items-center shadow-md">
                             <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
@@ -36,6 +39,7 @@
         {{-- Dashboard Stats --}}
         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
             {{-- Active Subscription Card --}}
+            @if($subscriptionsEnabled)
             <div class="bg-white rounded-lg shadow p-6">
                 <div class="flex items-center">
                     <div class="flex-shrink-0 {{ $activeSubscription ? 'bg-blue-100' : 'bg-gray-100' }} rounded-lg p-3">
@@ -59,6 +63,22 @@
                     </div>
                 </div>
             </div>
+            @else
+            <div class="bg-white rounded-lg shadow p-6">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0 bg-green-100 rounded-lg p-3">
+                        <svg class="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                    </div>
+                    <div class="ml-4">
+                        <p class="text-sm font-medium text-gray-500">Access Status</p>
+                        <p class="text-2xl font-semibold text-gray-900">Full Access</p>
+                        <p class="text-xs text-green-500">No subscription required</p>
+                    </div>
+                </div>
+            </div>
+            @endif
 
 {{-- Activities Card --}}
             <div class="bg-white rounded-lg shadow p-6">
@@ -77,8 +97,8 @@
             </div>
         </div>
 
-{{-- Subscription Plans Section (Show if user has no active subscription) --}}
-        @if(!$activeSubscription && $subscriptionPlans && $subscriptionPlans->count() > 0)
+{{-- Subscription Plans Section (Show if user has no active subscription and subscriptions are enabled) --}}
+        @if($subscriptionsEnabled && !$activeSubscription && $subscriptionPlans && $subscriptionPlans->count() > 0)
         <div id="subscription-plans" class="bg-white rounded-lg shadow mb-8 p-6">
             <div class="flex items-center justify-between mb-6">
                 <div>
@@ -152,12 +172,21 @@
                     </svg>
                     <span class="font-medium text-gray-900">View Activities</span>
                 </a>
+                @if($subscriptionsEnabled)
                 <a href="{{ route('member.subscriptions') }}" class="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
                     <svg class="w-5 h-5 text-green-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                     </svg>
                     <span class="font-medium text-gray-900">My Subscriptions</span>
                 </a>
+                @else
+                <a href="{{ route('eventreel.index') }}" class="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+                    <svg class="w-5 h-5 text-purple-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                    </svg>
+                    <span class="font-medium text-gray-900">Generate Video</span>
+                </a>
+                @endif
                 <a href="{{ route('member.profile') }}" class="flex items-center p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
                     <svg class="w-5 h-5 text-green-600 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
@@ -207,7 +236,7 @@
                         </svg>
                         <h3 class="mt-2 text-sm font-medium text-gray-900">No activities yet</h3>
                         <p class="mt-1 text-sm text-gray-500">
-                            @if($hasActiveSubscription)
+                            @if(!$subscriptionsEnabled || $hasActiveSubscription)
                                 Start by generating a video or checking in to see your activities here.
                             @else
                                 Subscribe to unlock activity tracking and video generation features.

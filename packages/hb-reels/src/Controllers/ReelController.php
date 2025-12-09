@@ -23,7 +23,7 @@ class ReelController
      */
     public function index()
     {
-        // Check if user is authenticated and has active subscription
+        // Check if user is authenticated
         if (!auth()->check()) {
             return redirect()->route('login')->with('error', 'Please login to access the video generator.');
         }
@@ -32,9 +32,12 @@ class ReelController
             return redirect()->route('frontend.home')->with('error', 'Access denied. Member or admin access required.');
         }
 
-        // Skip subscription check for admins
-        if (!auth()->user()->hasRole('admin') && !auth()->user()->hasActiveSubscription()) {
-            return redirect()->route('member.subscriptions')->with('error', 'You need an active subscription to generate videos. Please subscribe to continue.');
+        // Check subscription only if subscriptions are enabled
+        if (config('app.enable_subscription', env('ENABLE_SUBSCRIPTION', false))) {
+            // Skip subscription check for admins
+            if (!auth()->user()->hasRole('admin') && !auth()->user()->hasActiveSubscription()) {
+                return redirect()->route('member.subscriptions')->with('error', 'You need an active subscription to generate videos. Please subscribe to continue.');
+            }
         }
 
         return view('eventreel::index');
@@ -45,7 +48,7 @@ class ReelController
      */
     public function generate(Request $request)
     {
-        // Check if user is authenticated and has active subscription
+        // Check if user is authenticated
         if (!auth()->check()) {
             return redirect()->route('login')->with('error', 'Please login to access the video generator.');
         }
@@ -54,9 +57,12 @@ class ReelController
             return redirect()->route('frontend.home')->with('error', 'Access denied. Member or admin access required.');
         }
 
-        // Skip subscription check for admins
-        if (!auth()->user()->hasRole('admin') && !auth()->user()->hasActiveSubscription()) {
-            return redirect()->route('member.subscriptions')->with('error', 'You need an active subscription to generate videos. Please subscribe to continue.');
+        // Check subscription only if subscriptions are enabled
+        if (config('app.enable_subscription', env('ENABLE_SUBSCRIPTION', false))) {
+            // Skip subscription check for admins
+            if (!auth()->user()->hasRole('admin') && !auth()->user()->hasActiveSubscription()) {
+                return redirect()->route('member.subscriptions')->with('error', 'You need an active subscription to generate videos. Please subscribe to continue.');
+            }
         }
 
         $request->validate([

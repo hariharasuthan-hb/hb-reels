@@ -43,6 +43,20 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Enable Subscription
+    |--------------------------------------------------------------------------
+    |
+    | This value determines whether subscription functionality is enabled
+    | in the application. When disabled, users can access all features
+    | without needing to subscribe. When enabled, subscription workflow
+    | is required for certain features.
+    |
+    */
+
+    'enable_subscription' => (bool) env('ENABLE_SUBSCRIPTION', false),
+
+    /*
+    |--------------------------------------------------------------------------
     | Application URL
     |--------------------------------------------------------------------------
     |

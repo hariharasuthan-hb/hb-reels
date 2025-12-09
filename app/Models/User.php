@@ -125,13 +125,18 @@ class User extends Authenticatable
 
     /**
      * Check if user can access subscription features.
-     * Returns true if user is admin OR has active subscription.
+     * Returns true if user is admin, subscriptions are disabled, OR has active subscription.
      */
     public function canAccessSubscriptionFeatures(): bool
     {
         // Admins can always access
         if ($this->hasRole('admin')) {
             return true;
+        }
+
+        // If subscriptions are disabled, allow access
+        if (!config('app.enable_subscription', env('ENABLE_SUBSCRIPTION', false))) {
+            return $this->isActive();
         }
 
         // Check if user is active and has valid subscription

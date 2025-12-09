@@ -256,17 +256,20 @@ class MemberController extends Controller
         $user = auth()->user();
         $today = now()->toDateString();
 
-        // Ensure user has active subscription
-        $hasActiveSubscription = $user->subscriptions()
-            ->whereIn('status', ['active', 'trialing'])
-            ->where(function ($query) {
-                $query->whereNull('next_billing_at')
-                    ->orWhere('next_billing_at', '>=', now());
-            })
-            ->exists();
+        // Check subscription only if subscriptions are enabled
+        if (config('app.enable_subscription', env('ENABLE_SUBSCRIPTION', false))) {
+            // Ensure user has active subscription
+            $hasActiveSubscription = $user->subscriptions()
+                ->whereIn('status', ['active', 'trialing'])
+                ->where(function ($query) {
+                    $query->whereNull('next_billing_at')
+                        ->orWhere('next_billing_at', '>=', now());
+                })
+                ->exists();
 
-        if (!$hasActiveSubscription) {
-            return $this->unauthorizedResponse('You need an active subscription to check in.');
+            if (!$hasActiveSubscription) {
+                return $this->unauthorizedResponse('You need an active subscription to check in.');
+            }
         }
         
         // Check if already checked in today
@@ -303,16 +306,19 @@ class MemberController extends Controller
     {
         $user = auth()->user();
 
-        $hasActiveSubscription = $user->subscriptions()
-            ->whereIn('status', ['active', 'trialing'])
-            ->where(function ($query) {
-                $query->whereNull('next_billing_at')
-                    ->orWhere('next_billing_at', '>=', now());
-            })
-            ->exists();
+        // Check subscription only if subscriptions are enabled
+        if (config('app.enable_subscription', env('ENABLE_SUBSCRIPTION', false))) {
+            $hasActiveSubscription = $user->subscriptions()
+                ->whereIn('status', ['active', 'trialing'])
+                ->where(function ($query) {
+                    $query->whereNull('next_billing_at')
+                        ->orWhere('next_billing_at', '>=', now());
+                })
+                ->exists();
 
-        if (!$hasActiveSubscription) {
-            return $this->unauthorizedResponse('You need an active subscription to check out.');
+            if (!$hasActiveSubscription) {
+                return $this->unauthorizedResponse('You need an active subscription to check out.');
+            }
         }
 
         $todayActivity = ActivityLog::todayForUser($user->id);

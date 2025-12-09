@@ -127,6 +127,16 @@ if (!function_exists('format_date_input')) {
     }
 }
 
+if (!function_exists('subscriptions_enabled')) {
+    /**
+     * Check if subscriptions are enabled in the application.
+     */
+    function subscriptions_enabled(): bool
+    {
+        return config('app.enable_subscription', env('ENABLE_SUBSCRIPTION', false));
+    }
+}
+
 if (!function_exists('file_url')) {
     /**
      * Build a fully-qualified URL for a stored file path.
