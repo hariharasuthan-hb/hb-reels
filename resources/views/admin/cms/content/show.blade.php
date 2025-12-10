@@ -77,7 +77,7 @@
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-2">Content</label>
                         <div class="prose max-w-none text-gray-900">
-                            {!! nl2br(e($content->content)) !!}
+                            {!! render_content($content->content) !!}
                         </div>
                     </div>
                     @endif

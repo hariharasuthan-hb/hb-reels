@@ -34,7 +34,7 @@
                 <h2 class="text-xl font-semibold mb-4">Content</h2>
                 @if($page->content)
                     <div class="prose max-w-none">
-                        {!! nl2br(e($page->content)) !!}
+                        {!! render_content($page->content) !!}
                     </div>
                 @else
                     <p class="text-gray-500 italic">No content available.</p>

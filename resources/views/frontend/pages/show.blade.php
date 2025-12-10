@@ -19,7 +19,7 @@
         </header>
 
         <div class="prose prose-lg max-w-none">
-            {!! nl2br(e($page->content)) !!}
+            {!! render_content($page->content) !!}
         </div>
 
         <div class="mt-8 pt-8 border-t border-gray-200">

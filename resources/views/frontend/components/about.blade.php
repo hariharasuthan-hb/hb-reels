@@ -82,7 +82,7 @@
                         <h3 class="text-6xl font-bold {{ $aboutBackgroundImage || $aboutBackgroundVideo ? 'text-white' : 'text-gray-900' }}" style="color: {{ $cmsAbout->title_color ?? ($aboutBackgroundImage || $aboutBackgroundVideo ? '#ffffff' : '#111827') }};">Why Choose Us?</h3>
                         @if($aboutDescription)
                             <p class="{{ $aboutBackgroundImage || $aboutBackgroundVideo ? 'text-white' : 'text-gray-700' }} text-lg leading-relaxed" style="color: {{ $cmsAbout->description_color ?? ($aboutBackgroundImage || $aboutBackgroundVideo ? '#ffffff' : '#374151') }};">
-                                {!! $aboutDescription !!}
+                                {!! render_content($aboutDescription) !!}
                             </p>
                         @endif
                         @if($cmsAbout && $cmsAbout->link)
@@ -98,7 +98,7 @@
             {{-- Layout without Image - Centered Description --}}
             <div class="max-w-6xl mx-auto mb-12">
                 <p class="{{ $aboutBackgroundImage || $aboutBackgroundVideo ? 'text-white' : 'text-gray-700' }} text-lg leading-relaxed text-center" style="color: {{ $cmsAbout->description_color ?? ($aboutBackgroundImage || $aboutBackgroundVideo ? '#ffffff' : '#374151') }};">
-                    {!! $aboutDescription !!}
+                    {!! render_content($aboutDescription) !!}
                 </p>
             </div>
         @endif
@@ -115,7 +115,7 @@
                             <div class="text-5xl mb-6">{{ $feature['icon'] ?? '💪' }}</div>
                         @endif
                         <h3 class="text-xl font-bold mb-3 text-gray-900" style="color: {{ $feature['title_color'] ?? $cmsAbout->title_color ?? '#111827' }};">{{ $feature['title'] ?? 'Feature' }}</h3>
-                        <p class="text-gray-600 leading-relaxed" style="color: {{ $feature['content_color'] ?? $cmsAbout->content_color ?? '#4b5563' }};">{!! $feature['description'] ?? '' !!}</p>
+                        <p class="text-gray-600 leading-relaxed" style="color: {{ $feature['content_color'] ?? $cmsAbout->content_color ?? '#4b5563' }};">{!! render_content($feature['description'] ?? '') !!}</p>
                     </div>
                 @endforeach
             </div>

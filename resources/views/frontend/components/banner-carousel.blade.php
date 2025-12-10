@@ -36,7 +36,7 @@
                                     $title = preg_replace('/\b(Build)\b/i', '<span class="font-bold italic">$1</span>', $title);
                                 @endphp
                                 <h1 class="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold mb-4 animate-slide-left leading-tight break-words px-4 {{ $isLongTitle ? 'text-left' : '' }}" style="word-wrap: break-word; overflow-wrap: break-word;">
-                                    {!! $title !!}
+                                    {!! render_content($title) !!}
                                 </h1>
                             @endif
                             @if($banner->subtitle)

@@ -79,7 +79,7 @@
         <div class="text-center mb-12">
             <h2 class="text-4xl font-bold mb-4 {{ $testimonialsBackgroundImage || $testimonialsBackgroundVideo ? 'text-white' : 'text-gray-900' }}" style="color: {{ $cmsTestimonialsSection->title_color ?? ($testimonialsBackgroundImage || $testimonialsBackgroundVideo ? '#ffffff' : '#111827') }};">{{ $testimonialsTitle }}</h2>
             <p class="{{ $testimonialsBackgroundImage || $testimonialsBackgroundVideo ? 'text-white' : 'text-gray-600' }} max-w-2xl mx-auto" style="color: {{ $cmsTestimonialsSection->description_color ?? ($testimonialsBackgroundImage || $testimonialsBackgroundVideo ? '#ffffff' : '#4b5563') }};">
-                {!! $testimonialsDescription !!}
+                {!! render_content($testimonialsDescription) !!}
             </p>
         </div>
         @if($sectionVideo)
@@ -123,7 +123,7 @@
                         @endif
 
                         <p class="text-gray-600 italic mb-4" style="color: {{ $cmsTestimonialsSection->content_color ?? '#4b5563' }};">
-                            "{!! $testimonial->content ?? $testimonial->description ?? '' !!}"
+                            "{!! render_content($testimonial->content ?? $testimonial->description ?? '') !!}"
                         </p>
                         @if($testimonial->extra_data && isset($testimonial->extra_data['rating']))
                             <div class="flex items-center">
