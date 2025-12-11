@@ -115,7 +115,7 @@ class GrammarService
     {
         try {
             $ollamaUrl = config('eventreel.ollama_url', 'http://localhost:11434');
-            $model = config('eventreel.ollama_grammar_model', 'phi'); // Use smaller model for grammar checking
+            $model = config('eventreel.ollama_model', 'mistral'); // Use Mistral model for grammar checking
             
             $languageName = $this->supportedLanguages[$language] ?? 'English';
             
