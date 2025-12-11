@@ -43,7 +43,7 @@ class GrammarService
     public function __construct()
     {
         $this->client = new Client([
-            'timeout' => 30,
+            'timeout' => 60, // Increased timeout for AI responses
             'connect_timeout' => 10
         ]);
         
@@ -115,7 +115,7 @@ class GrammarService
     {
         try {
             $ollamaUrl = config('eventreel.ollama_url', 'http://localhost:11434');
-            $model = config('eventreel.ollama_model', 'mistral');
+            $model = config('eventreel.ollama_grammar_model', 'phi'); // Use smaller model for grammar checking
             
             $languageName = $this->supportedLanguages[$language] ?? 'English';
             
@@ -131,7 +131,7 @@ class GrammarService
                         'num_predict' => 200
                     ]
                 ],
-                'timeout' => 30
+                'timeout' => 60
             ]);
             
             $result = json_decode($response->getBody(), true);
@@ -167,6 +167,8 @@ class GrammarService
      */
     private function basicCorrections(string $text, string $language): string
     {
+        $originalText = $text;
+
         // Basic corrections that work across languages
         
         // Fix multiple spaces
@@ -188,6 +190,25 @@ class GrammarService
         
         // Fix common typos
         $text = str_replace(' i ', ' I ', $text); // English "i" to "I"
+
+        // Fix common spelling errors (case-insensitive)
+        $commonTypos = [
+            'crismas' => 'Christmas',
+            'crismus' => 'Christmas',
+            'fro' => 'for',
+            'recieve' => 'receive',
+            'seperate' => 'separate',
+            'occassion' => 'occasion',
+            'begining' => 'beginning',
+            'comming' => 'coming',
+            'writting' => 'writing',
+            'beleive' => 'believe',
+            'wierd' => 'weird',
+        ];
+
+        foreach ($commonTypos as $wrong => $correct) {
+            $text = str_ireplace($wrong, $correct, $text);
+        }
         
         return trim($text);
     }

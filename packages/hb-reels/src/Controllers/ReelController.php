@@ -82,6 +82,7 @@ class ReelController
         try {
             $ocrService = app(OCRService::class);
             $aiService = app(AIService::class);
+            $grammarService = app(\HbReels\EventReelGenerator\Services\GrammarService::class);
             $pexelsService = app(PexelsService::class);
             $videoRenderer = app(VideoRenderer::class);
 
@@ -92,6 +93,16 @@ class ReelController
             if ($request->hasFile('flyer_image')) {
                 $flyerPath = $this->storeFlyer($request->file('flyer_image'));
             }
+
+            // AI-powered spell check and grammar correction
+            $originalText = $eventText;
+            $eventText = $grammarService->checkGrammar($eventText);
+
+            \Log::info('AI Grammar Check Applied', [
+                'original_text' => $originalText,
+                'corrected_text' => $eventText,
+                'text_changed' => $originalText !== $eventText
+            ]);
 
             // Generate AI caption and video search optimization
             $contentAnalysis = $aiService->generateCaption($eventText);

@@ -6,11 +6,13 @@ use GuzzleHttp\Client;
 use GuzzleHttp\ClientInterface;
 use GuzzleHttp\Exception\GuzzleException;
 use Stichoza\GoogleTranslate\GoogleTranslate;
+use HbReels\EventReelGenerator\Services\GrammarService;
 
 class AIService
 {
     private ClientInterface $client;
     private bool $useGoogleTranslate;
+    private GrammarService $grammarService;
 
     public function __construct(?ClientInterface $client = null)
     {
@@ -20,6 +22,9 @@ class AIService
         
         // Enable Google Translate for better accuracy in non-English languages
         $this->useGoogleTranslate = config('eventreel.use_google_translate', true);
+
+        // Initialize grammar service for text correction
+        $this->grammarService = app(GrammarService::class);
     }
 
     /**
@@ -269,8 +274,21 @@ JSON:";
                         'count' => count($englishLines)
                     ]);
                     
-                    // If we got at least one line, translate if needed
+                    // If we got at least one line, apply grammar checking then translate if needed
                     if (!empty($englishLines)) {
+                        // Apply AI grammar checking to each extracted line
+                        foreach ($englishLines as $lineKey => $lineText) {
+                            $originalLine = $lineText;
+                            $englishLines[$lineKey] = $this->grammarService->checkGrammar($lineText, 'en');
+
+                            if ($originalLine !== $englishLines[$lineKey]) {
+                                \Log::info("Grammar corrected for {$lineKey}", [
+                                    'original' => $originalLine,
+                                    'corrected' => $englishLines[$lineKey]
+                                ]);
+                            }
+                        }
+
                         // Step 2: If target language is not English, translate each line
                         if ($language !== 'en') {
                             $totalLines = count($englishLines);
@@ -361,9 +379,12 @@ JSON:";
         
         for ($i = 0; $i < $lineCount; $i++) {
             if (isset($sentences[$i])) {
+                // Apply grammar checking to each line
+                $processedLine = $this->grammarService->checkGrammar($sentences[$i], $language);
+
                 // Truncate to 50 chars if needed
-                $line = substr($sentences[$i], 0, 50);
-                if (strlen($sentences[$i]) > 50) {
+                $line = substr($processedLine, 0, 50);
+                if (strlen($processedLine) > 50) {
                     $line = substr($line, 0, 47) . '...';
                 }
                 $lines["line" . ($i + 1)] = $line;
