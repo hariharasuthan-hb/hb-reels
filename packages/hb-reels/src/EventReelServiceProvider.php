@@ -81,7 +81,7 @@ class EventReelServiceProvider extends ServiceProvider
     protected function scheduleCleanup(): void
     {
         // Only schedule if we're not in console (to avoid duplicate scheduling)
-        if (!$this->app->runningInConsole()) {
+        if ($this->app->runningInConsole()) {
             return;
         }
 
