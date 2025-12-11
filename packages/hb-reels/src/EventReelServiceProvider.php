@@ -5,6 +5,7 @@ namespace HbReels\EventReelGenerator;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Facades\Route;
 use HbReels\EventReelGenerator\Console\GenerateReelCommand;
+use HbReels\EventReelGenerator\Console\CleanupVideosCommand;
 
 class EventReelServiceProvider extends ServiceProvider
 {
@@ -24,6 +25,7 @@ class EventReelServiceProvider extends ServiceProvider
         $this->app->singleton(\HbReels\EventReelGenerator\Services\AIService::class);
         $this->app->singleton(\HbReels\EventReelGenerator\Services\PexelsService::class);
         $this->app->singleton(\HbReels\EventReelGenerator\Services\VideoRenderer::class);
+        $this->app->singleton(\HbReels\EventReelGenerator\Services\GrammarService::class);
     }
 
     /**
@@ -48,11 +50,15 @@ class EventReelServiceProvider extends ServiceProvider
         if ($this->app->runningInConsole()) {
             $this->commands([
                 GenerateReelCommand::class,
+                CleanupVideosCommand::class,
             ]);
         }
 
         // Load routes
         $this->loadRoutes();
+
+        // Schedule cleanup of old video files
+        $this->scheduleCleanup();
     }
 
     /**
@@ -67,6 +73,76 @@ class EventReelServiceProvider extends ServiceProvider
             ->group(function () {
                 require __DIR__ . '/../routes/web.php';
             });
+    }
+
+    /**
+     * Schedule cleanup of old video files to prevent disk space accumulation.
+     */
+    protected function scheduleCleanup(): void
+    {
+        // Only schedule if we're not in console (to avoid duplicate scheduling)
+        if (!$this->app->runningInConsole()) {
+            return;
+        }
+
+        $schedule = $this->app->make(\Illuminate\Console\Scheduling\Schedule::class);
+
+        // Clean up temp and output video files older than 1 hour
+        $schedule->call(function () {
+            $this->cleanupOldVideoFiles();
+        })->hourly();
+    }
+
+    /**
+     * Clean up old video files from temp and output directories.
+     */
+    protected function cleanupOldVideoFiles(): void
+    {
+        $disk = config('eventreel.storage.disk');
+        $tempPath = config('eventreel.storage.temp_path');
+        $outputPath = config('eventreel.storage.output_path');
+
+        // Maximum age for files (1 hour = 3600 seconds)
+        $maxAge = 3600;
+        $now = time();
+        $cleanedCount = 0;
+
+        try {
+            // Clean temp files
+            $tempFiles = Storage::disk($disk)->files($tempPath);
+            foreach ($tempFiles as $file) {
+                $fullPath = Storage::disk($disk)->path($file);
+                if (file_exists($fullPath) && ($now - filemtime($fullPath)) > $maxAge) {
+                    Storage::disk($disk)->delete($file);
+                    $cleanedCount++;
+                }
+            }
+
+            // Clean output files (be more aggressive with output files)
+            $outputFiles = Storage::disk($disk)->files($outputPath);
+            foreach ($outputFiles as $file) {
+                $fullPath = Storage::disk($disk)->path($file);
+                if (file_exists($fullPath) && ($now - filemtime($fullPath)) > $maxAge) {
+                    Storage::disk($disk)->delete($file);
+                    $cleanedCount++;
+                }
+            }
+
+            if ($cleanedCount > 0) {
+                \Log::info('Cleaned up old video files', [
+                    'files_cleaned' => $cleanedCount,
+                    'temp_path' => $tempPath,
+                    'output_path' => $outputPath
+                ]);
+            }
+
+        } catch (\Exception $e) {
+            \Log::error('Failed to cleanup old video files', [
+                'error' => $e->getMessage(),
+                'temp_path' => $tempPath,
+                'output_path' => $outputPath
+            ]);
+        }
     }
 }
 

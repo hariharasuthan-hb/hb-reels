@@ -7,6 +7,7 @@ use HbReels\EventReelGenerator\Services\AIService;
 use HbReels\EventReelGenerator\Services\OCRService;
 use HbReels\EventReelGenerator\Services\PexelsService;
 use HbReels\EventReelGenerator\Services\VideoRenderer;
+use HbReels\EventReelGenerator\Jobs\DeleteVideoFile;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Storage;
@@ -165,11 +166,22 @@ class ReelController
                 Storage::disk(config('eventreel.storage.disk'))->delete($stockVideoPath);
             }
 
-            // Return download response
-            return Storage::disk(config('eventreel.storage.disk'))->download(
+            // Return download response with delayed cleanup
+            $disk = config('eventreel.storage.disk');
+            $downloadResponse = Storage::disk($disk)->download(
                 $outputPath,
                 'event-reel-' . now()->format('Y-m-d-His') . '.mp4'
             );
+
+            // Schedule cleanup 2 minutes after download starts (allows time for download to complete)
+            DeleteVideoFile::dispatch($disk, $outputPath)->delay(now()->addMinutes(2));
+
+            \Log::info('Video download initiated, cleanup scheduled for 2 minutes later', [
+                'path' => $outputPath,
+                'scheduled_cleanup' => now()->addMinutes(2)->toDateTimeString()
+            ]);
+
+            return $downloadResponse;
 
         } catch (\Exception $e) {
             return back()
