@@ -52,7 +52,7 @@ Route::prefix('admin')->name('admin.')->middleware(['auth'])->group(function () 
             ->name('finances.index');
         
         // Reports
-        Route::get('/reports', [\App\Http\Controllers\Admin\ReportController::class, 'index'])->name('reports.index');
+        //Route::get('/reports', [\App\Http\Controllers\Admin\ReportController::class, 'index'])->name('reports.index');
         
         // CMS Management (for frontend content)
         Route::prefix('cms')->name('cms.')->group(function () {
