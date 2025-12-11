@@ -8,6 +8,8 @@ use HbReels\EventReelGenerator\Services\OCRService;
 use HbReels\EventReelGenerator\Services\PexelsService;
 use HbReels\EventReelGenerator\Services\VideoRenderer;
 use HbReels\EventReelGenerator\Jobs\DeleteVideoFile;
+use HbReels\EventReelGenerator\Jobs\GenerateVideoReel;
+use HbReels\EventReelGenerator\Jobs\CleanupDownloadedVideo;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Storage;
@@ -43,6 +45,158 @@ class ReelController
 
         return view('eventreel::index');
     }
+
+    /**
+     * Check video generation status and return download URL if ready.
+     */
+    public function checkStatus()
+    {
+        \Log::info('Status endpoint called', [
+            'user_authenticated' => auth()->check(),
+            'user_id' => auth()->id()
+        ]);
+
+        // Check if user is authenticated
+        if (!auth()->check()) {
+            \Log::warning('Status check failed: user not authenticated');
+            return response()->json(['error' => 'Unauthorized'], 401);
+        }
+
+        // Get the timestamp of the current generation session
+        $generationTimestamp = session('video_generation_timestamp');
+
+        \Log::info('Status check with session tracking', [
+            'user_id' => auth()->id(),
+            'generation_timestamp' => $generationTimestamp ? $generationTimestamp->toDateTimeString() : 'none'
+        ]);
+
+        // Build query for completed videos
+        $query = ActivityLog::where('user_id', auth()->id())
+            ->where('activity_type', 'event_reel_generation')
+            ->where('status', 'completed')
+            ->whereNotNull('video_path');
+
+        // If we have a generation timestamp, only check videos created after it
+        if ($generationTimestamp) {
+            $query->where('created_at', '>=', $generationTimestamp);
+        } else {
+            // Fallback to last 24 hours if no session timestamp
+            $query->where('created_at', '>=', now()->subDay());
+        }
+
+        $completedVideos = $query->latest()
+            ->get()
+            ->filter(function ($video) {
+                // Verify file still exists
+                $exists = Storage::disk(config('eventreel.storage.disk'))->exists($video->video_path);
+                \Log::info('Checking video file existence', [
+                    'video_id' => $video->id,
+                    'path' => $video->video_path,
+                    'exists' => $exists
+                ]);
+                return $exists;
+            });
+
+        \Log::info('Status check result', [
+            'user_id' => auth()->id(),
+            'completed_videos_count' => $completedVideos->count(),
+            'generation_timestamp' => $generationTimestamp ? $generationTimestamp->toDateTimeString() : 'none',
+            'status' => $completedVideos->isNotEmpty() ? 'ready' : 'none'
+        ]);
+
+        if ($completedVideos->isNotEmpty()) {
+            $latestVideo = $completedVideos->first();
+
+            \Log::info('Video ready for automatic download', [
+                'user_id' => auth()->id(),
+                'activity_log_id' => $latestVideo->id,
+                'video_path' => $latestVideo->video_path
+            ]);
+
+            // Don't schedule cleanup here - it will be scheduled when download actually starts
+            return response()->json([
+                'status' => 'ready',
+                'download_url' => route(config('eventreel.route_name_prefix') . 'download', $latestVideo->id),
+                'filename' => $latestVideo->video_filename ?: 'event-reel-' . now()->format('Y-m-d-His') . '.mp4'
+            ]);
+        }
+
+        // Check if there are any queued or processing videos
+        $processingVideos = ActivityLog::where('user_id', auth()->id())
+            ->where('activity_type', 'event_reel_generation')
+            ->whereIn('status', ['queued'])
+            ->where('created_at', '>=', now()->subHours(1))
+            ->exists();
+
+        \Log::info('Processing check result', [
+            'user_id' => auth()->id(),
+            'has_processing' => $processingVideos
+        ]);
+
+        if ($processingVideos) {
+            return response()->json(['status' => 'processing']);
+        }
+
+        return response()->json(['status' => 'none']);
+    }
+
+    /**
+     * Download completed video (called automatically by JavaScript).
+     */
+    public function download($activityLogId)
+    {
+        // Check if user is authenticated
+        if (!auth()->check()) {
+            return response()->json(['error' => 'Unauthorized'], 401);
+        }
+
+        $activityLog = ActivityLog::where('id', $activityLogId)
+            ->where('user_id', auth()->id())
+            ->where('activity_type', 'event_reel_generation')
+            ->where('status', 'completed')
+            ->first();
+
+        if (!$activityLog || !$activityLog->video_path) {
+            \Log::error('Video not found for download', [
+                'activity_log_id' => $activityLogId,
+                'user_id' => auth()->id()
+            ]);
+            return response()->json(['error' => 'Video not found'], 404);
+        }
+
+        $disk = config('eventreel.storage.disk');
+
+        if (!Storage::disk($disk)->exists($activityLog->video_path)) {
+            \Log::error('Video file does not exist', [
+                'activity_log_id' => $activityLogId,
+                'path' => $activityLog->video_path,
+                'disk' => $disk
+            ]);
+            return response()->json(['error' => 'Video file not available'], 404);
+        }
+
+        // Schedule cleanup after 30 seconds to allow download to complete
+        CleanupDownloadedVideo::dispatch([
+            'activity_log_id' => $activityLog->id,
+            'disk' => $disk,
+            'file_path' => $activityLog->video_path
+        ])->delay(now()->addSeconds(30));
+
+        \Log::info('Download initiated, cleanup scheduled', [
+            'activity_log_id' => $activityLog->id,
+            'user_id' => auth()->id(),
+            'cleanup_scheduled' => now()->addSeconds(30)->toDateTimeString()
+        ]);
+
+        // Clear the generation timestamp from session since download is starting
+        session()->forget('video_generation_timestamp');
+
+        return Storage::disk($disk)->download(
+            $activityLog->video_path,
+            $activityLog->video_filename ?: 'event-reel-' . now()->format('Y-m-d-His') . '.mp4'
+        );
+    }
+
 
     /**
      * Generate event reel from uploaded image or text.
@@ -81,11 +235,6 @@ class ReelController
 
         try {
             $ocrService = app(OCRService::class);
-            $aiService = app(AIService::class);
-            $grammarService = app(\HbReels\EventReelGenerator\Services\GrammarService::class);
-            $pexelsService = app(PexelsService::class);
-            $videoRenderer = app(VideoRenderer::class);
-
             $eventText = $this->extractEventText($request, $ocrService);
             $showFlyer = $request->boolean('show_flyer', false);
             $flyerPath = null;
@@ -94,109 +243,52 @@ class ReelController
                 $flyerPath = $this->storeFlyer($request->file('flyer_image'));
             }
 
-            // AI-powered spell check and grammar correction
-            $originalText = $eventText;
-            $eventText = $grammarService->checkGrammar($eventText);
+            // Prepare data for the job
+            $jobData = [
+                'event_text' => $eventText,
+                'show_flyer' => $showFlyer,
+            ];
 
-            \Log::info('AI Grammar Check Applied', [
-                'original_text' => $originalText,
-                'corrected_text' => $eventText,
-                'text_changed' => $originalText !== $eventText
-            ]);
+            // Store the generation timestamp in session to track this specific generation
+            $generationTimestamp = now();
+            session(['video_generation_timestamp' => $generationTimestamp]);
 
-            // Generate AI caption and video search optimization
-            $contentAnalysis = $aiService->generateCaption($eventText);
-            $caption = $contentAnalysis['caption'];
-            $videoKeywords = $contentAnalysis['video_keywords'] ?? [];
+            // Dispatch the video generation job
+            GenerateVideoReel::dispatch($jobData, auth()->id(), $flyerPath);
 
-            \Log::info('AI Content Analysis Complete', [
-                'caption' => $caption,
-                'video_keywords' => $videoKeywords,
-                'content_type' => $contentAnalysis['content_analysis']['type'] ?? 'unknown',
-                'tone' => $contentAnalysis['content_analysis']['tone'] ?? 'unknown'
-            ]);
-
-            // Extract structured details from text using AI (handles any content type)
-            $contentDetails = $aiService->extractEventDetails($eventText);
-
-            // Format overlay text from extracted details
-            $overlayText = $this->formatContentOverlay($contentDetails);
-
-            // Get stock video from Pexels using optimized keywords
-            $videoSearchTerm = $this->createOptimalVideoSearch($caption, $videoKeywords);
-            \Log::info('Starting Pexels video download', [
-                'caption' => $caption,
-                'optimized_search' => $videoSearchTerm,
-                'ai_keywords' => $videoKeywords
-            ]);
-            $stockVideoPath = $pexelsService->downloadVideo($videoSearchTerm);
-
-            // Determine what to show in the video:
-            // - If showFlyer is TRUE: Show flyer only, no captions
-            // - If showFlyer is FALSE and flyer exists: Show flyer + captions overlay
-            // - If showFlyer is FALSE and no flyer: Show stock video + captions
-            
-            $displayFlyerPath = $flyerPath; // Always use flyer if it exists (background)
-            $displayCaption = $showFlyer ? null : $overlayText; // Only hide caption if checkbox is checked
-            
-            \Log::info('Rendering video', [
-                'showFlyer_checkbox' => $showFlyer,
-                'flyerPath_exists' => $flyerPath ? 'yes' : 'no',
-                'displayFlyerPath' => $displayFlyerPath ? 'yes' : 'no',
-                'displayCaption' => $displayCaption,
-            ]);
-            
-            // Render final video
-            $outputPath = $videoRenderer->render(
-                stockVideoPath: $stockVideoPath,
-                flyerPath: $displayFlyerPath,
-                caption: $displayCaption
-            );
-
-            // Log video generation activity
-            $videoFilename = basename($outputPath);
-            $videoSize = Storage::disk(config('eventreel.storage.disk'))->size($outputPath);
-
+            // Log the queued job
             ActivityLog::create([
                 'user_id' => auth()->id(),
                 'activity_type' => 'event_reel_generation',
                 'date' => now()->toDateString(),
-                'workout_summary' => 'Generated event reel: ' . $eventText,
-                'video_filename' => $videoFilename,
-                'video_caption' => $overlayText,
-                'video_path' => $outputPath,
-                'video_size_bytes' => $videoSize,
+                'workout_summary' => 'Queued event reel generation: ' . $eventText,
                 'check_in_method' => 'web',
+                'status' => 'queued'
             ]);
 
-            // Clean up temporary files
-            if ($flyerPath) {
-                Storage::disk(config('eventreel.storage.disk'))->delete($flyerPath);
-            }
-            if ($stockVideoPath) {
-                Storage::disk(config('eventreel.storage.disk'))->delete($stockVideoPath);
-            }
-
-            // Return download response with delayed cleanup
-            $disk = config('eventreel.storage.disk');
-            $downloadResponse = Storage::disk($disk)->download(
-                $outputPath,
-                'event-reel-' . now()->format('Y-m-d-His') . '.mp4'
-            );
-
-            // Schedule cleanup 2 minutes after download starts (allows time for download to complete)
-            DeleteVideoFile::dispatch($disk, $outputPath)->delay(now()->addMinutes(2));
-
-            \Log::info('Video download initiated, cleanup scheduled for 2 minutes later', [
-                'path' => $outputPath,
-                'scheduled_cleanup' => now()->addMinutes(2)->toDateTimeString()
+            \Log::info('Video generation job queued', [
+                'user_id' => auth()->id(),
+                'event_text' => $eventText,
+                'flyer_provided' => $flyerPath ? 'yes' : 'no',
+                'generation_timestamp' => $generationTimestamp
             ]);
 
-            return $downloadResponse;
+            // Return success response - stay on same page with processing message
+            return back()->with('processing', 'Your video is being generated! Processing may take a few minutes. Please wait...')->withInput();
 
         } catch (\Exception $e) {
+            // Clean up flyer if it was stored but job failed to queue
+            if (isset($flyerPath) && $flyerPath) {
+                Storage::disk(config('eventreel.storage.disk'))->delete($flyerPath);
+            }
+
+            \Log::error('Failed to queue video generation job', [
+                'user_id' => auth()->id(),
+                'error' => $e->getMessage()
+            ]);
+
             return back()
-                ->withErrors(['error' => 'Failed to generate reel: ' . $e->getMessage()])
+                ->withErrors(['error' => 'Failed to queue video generation: ' . $e->getMessage()])
                 ->withInput();
         }
     }
@@ -294,5 +386,6 @@ class ReelController
 
         return $path;
     }
+
 }
 

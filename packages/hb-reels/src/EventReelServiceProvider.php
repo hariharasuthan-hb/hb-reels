@@ -94,7 +94,7 @@ class EventReelServiceProvider extends ServiceProvider
     }
 
     /**
-     * Clean up old video files from temp and output directories.
+     * Clean up old video files from temp and output directories and orphaned database records.
      */
     protected function cleanupOldVideoFiles(): void
     {
@@ -105,7 +105,8 @@ class EventReelServiceProvider extends ServiceProvider
         // Maximum age for files (1 hour = 3600 seconds)
         $maxAge = 3600;
         $now = time();
-        $cleanedCount = 0;
+        $filesCleaned = 0;
+        $recordsCleaned = 0;
 
         try {
             // Clean temp files
@@ -114,30 +115,46 @@ class EventReelServiceProvider extends ServiceProvider
                 $fullPath = Storage::disk($disk)->path($file);
                 if (file_exists($fullPath) && ($now - filemtime($fullPath)) > $maxAge) {
                     Storage::disk($disk)->delete($file);
-                    $cleanedCount++;
+                    $filesCleaned++;
                 }
             }
 
-            // Clean output files (be more aggressive with output files)
+            // Clean output files and check for orphaned database records
             $outputFiles = Storage::disk($disk)->files($outputPath);
             foreach ($outputFiles as $file) {
                 $fullPath = Storage::disk($disk)->path($file);
                 if (file_exists($fullPath) && ($now - filemtime($fullPath)) > $maxAge) {
                     Storage::disk($disk)->delete($file);
-                    $cleanedCount++;
+                    $filesCleaned++;
                 }
             }
 
-            if ($cleanedCount > 0) {
-                \Log::info('Cleaned up old video files', [
-                    'files_cleaned' => $cleanedCount,
+            // Clean up orphaned database records (completed videos with missing files)
+            $oldCompletedVideos = \App\Models\ActivityLog::where('activity_type', 'event_reel_generation')
+                ->where('status', 'completed')
+                ->where('created_at', '<', now()->subHours(2)) // Older than 2 hours
+                ->whereNotNull('video_path')
+                ->get();
+
+            foreach ($oldCompletedVideos as $video) {
+                if (!Storage::disk($disk)->exists($video->video_path)) {
+                    // File doesn't exist, clean up the database record
+                    $video->delete();
+                    $recordsCleaned++;
+                }
+            }
+
+            if ($filesCleaned > 0 || $recordsCleaned > 0) {
+                \Log::info('Cleaned up old video files and records', [
+                    'files_cleaned' => $filesCleaned,
+                    'records_cleaned' => $recordsCleaned,
                     'temp_path' => $tempPath,
                     'output_path' => $outputPath
                 ]);
             }
 
         } catch (\Exception $e) {
-            \Log::error('Failed to cleanup old video files', [
+            \Log::error('Failed to cleanup old video files and records', [
                 'error' => $e->getMessage(),
                 'temp_path' => $tempPath,
                 'output_path' => $outputPath

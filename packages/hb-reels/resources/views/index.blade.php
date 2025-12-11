@@ -74,6 +74,22 @@
                 @endif
             @endauth
 
+            {{-- Video Processing Message --}}
+            @if(session('processing'))
+                <div class="mb-4 p-4 bg-blue-50 border border-blue-300 rounded-lg" id="processing-section">
+                    <div class="flex items-start gap-3">
+                        <svg class="w-6 h-6 text-blue-600 animate-spin flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                        </svg>
+                        <div class="flex-1">
+                            <h3 class="text-sm font-medium text-blue-800">Video Processing</h3>
+                            <p class="text-sm text-blue-700 mb-2">{{ session('processing') }}</p>
+                            <p class="text-xs text-blue-600">Please wait while we generate your video. The download will start automatically once ready.</p>
+                        </div>
+                    </div>
+                </div>
+            @endif
+
             {{-- Trial Warning Flash Message --}}
             @if(session('trial_warning'))
                 <div class="mb-4 p-4 bg-yellow-50 border border-yellow-300 rounded-lg">
@@ -102,7 +118,7 @@
                 </div>
             @endif
 
-            <form action="{{ route(config('eventreel.route_name_prefix') . 'generate') }}" method="POST" enctype="multipart/form-data" id="reel-form">
+            <form action="{{ route(config('eventreel.route_name_prefix') . 'generate') }}" method="POST" enctype="multipart/form-data" id="reel-form" {{ session('processing') ? 'style="pointer-events: none; opacity: 0.7;"' : '' }}>
                 @csrf
 
                 {{-- Image Upload --}}
@@ -184,20 +200,34 @@
 
 
                 {{-- Generate Button --}}
-                <button 
-                    type="submit" 
-                    id="generate-btn"
-                    class="w-full bg-orange-500 hover:bg-orange-600 text-white font-semibold py-4 px-6 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
-                >
-                    <span id="btn-text">Generate</span>
-                    <span id="btn-loading" class="hidden">
+                @if(session('processing'))
+                    <button
+                        type="button"
+                        disabled
+                        class="w-full bg-gray-400 text-white font-semibold py-4 px-6 rounded-lg cursor-not-allowed"
+                    >
                         <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white inline" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
                             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                         </svg>
-                        Generating...
-                    </span>
-                </button>
+                        Video Processing...
+                    </button>
+                @else
+                    <button
+                        type="submit"
+                        id="generate-btn"
+                        class="w-full bg-orange-500 hover:bg-orange-600 text-white font-semibold py-4 px-6 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2"
+                    >
+                        <span id="btn-text">Generate</span>
+                        <span id="btn-loading" class="hidden">
+                            <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white inline" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            Generating...
+                        </span>
+                    </button>
+                @endif
             </form>
         </div>
 
@@ -228,7 +258,8 @@
         const generateBtn = document.getElementById('generate-btn');
         const btnText = document.getElementById('btn-text');
         const btnLoading = document.getElementById('btn-loading');
-            
+        const processingSection = document.getElementById('processing-section');
+
         const resetGenerateButton = () => {
             if (!generateBtn || !btnText || !btnLoading) {
                 return;
@@ -246,14 +277,95 @@
             setTimeout(restoreState, 9000);
         };
 
+        // Check video status and trigger automatic download
+        const checkVideoStatus = async () => {
+            if (!processingSection) return;
+
+            try {
+                const statusUrl = '{{ route(config("eventreel.route_name_prefix") . "status") }}';
+                console.log('Checking status at:', statusUrl);
+
+                const response = await fetch(statusUrl, {
+                    method: 'GET',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
+                    },
+                    credentials: 'same-origin'
+                });
+                const data = await response.json();
+
+                console.log('Status response:', data);
+
+                if (data.status === 'ready') {
+                    console.log('Video ready, starting download...');
+
+                    // Video is ready, trigger download
+                    const link = document.createElement('a');
+                    link.href = data.download_url;
+                    link.download = data.filename || 'event-reel.mp4';
+                    link.style.display = 'none';
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+
+                    console.log('Download triggered for:', data.filename);
+
+                    // Hide processing section and show success message briefly
+                    processingSection.innerHTML = `
+                        <div class="flex items-start gap-3">
+                            <svg class="w-6 h-6 text-green-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            <div class="flex-1">
+                                <h3 class="text-sm font-medium text-green-800">Download Started!</h3>
+                                <p class="text-sm text-green-700">Your video is downloading automatically.</p>
+                            </div>
+                        </div>
+                    `;
+
+                    // Hide processing section after 3 seconds and reset form
+                    setTimeout(() => {
+                        processingSection.style.display = 'none';
+                        resetGenerateButton();
+                        // Reload page to clear session
+                        window.location.reload();
+                    }, 3000);
+
+                } else if (data.status === 'processing') {
+                    console.log('Still processing, checking again in 3 seconds...');
+                    // Still processing, check again in 3 seconds
+                    setTimeout(checkVideoStatus, 3000);
+                } else {
+                    console.log('Status:', data.status, '- stopping polling');
+                }
+            } catch (error) {
+                console.error('Error checking video status:', error);
+                // Retry in 5 seconds on error
+                setTimeout(checkVideoStatus, 5000);
+            }
+        };
+
         if (reelForm && generateBtn && btnText && btnLoading) {
             reelForm.addEventListener('submit', function(e) {
+                console.log('Form submitted, starting processing...');
                 generateBtn.disabled = true;
-            btnText.classList.add('hidden');
-            btnLoading.classList.remove('hidden');
+                btnText.classList.add('hidden');
+                btnLoading.classList.remove('hidden');
+
+                // Start checking for video status after form submission (wait longer for queue processing)
+                console.log('Will start status checking in 5 seconds...');
+                setTimeout(checkVideoStatus, 5000);
 
                 scheduleButtonReset();
-        });
+            });
+        }
+
+        // Start checking immediately if processing section is visible
+        if (processingSection && processingSection.offsetParent !== null) {
+            console.log('Processing section visible, starting status checks...');
+            setTimeout(checkVideoStatus, 2000);
         }
     </script>
 </body>

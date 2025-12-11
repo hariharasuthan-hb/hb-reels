@@ -39,6 +39,9 @@ class ActivityLog extends Model
         'video_caption',
         'video_path',
         'video_size_bytes',
+        'job_id',
+        'status',
+        'error_message',
     ];
 
     /**
