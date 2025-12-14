@@ -68,9 +68,12 @@ CONTENT ANALYSIS:
 2. Determine the emotional tone (joyful, professional, romantic, energetic, elegant, etc.)
 3. Extract key visual and thematic elements (colors, lighting, setting, activities, atmosphere)
 
-CAPTION CREATION - CRITICAL REQUIREMENT:
+CAPTION CREATION - CRITICAL REQUIREMENTS:
 - Create a BRAND NEW, creative, and engaging caption (1-3 lines maximum)
 - DO NOT copy or repeat the original text word-for-word
+- DO NOT add any explanations, comments, or notes in the caption
+- DO NOT include text like \"(This is...)\" or \"(No corrections needed)\" in the caption
+- The caption field must contain ONLY the actual caption text, nothing else
 - Transform the description into an exciting, professional video caption
 - Use dynamic, engaging language that captures the event's energy
 - Make it perfect for video overlay text - concise but impactful
@@ -82,11 +85,13 @@ VIDEO SEARCH OPTIMIZATION:
 - Use descriptive terms video search engines understand (e.g., 'bright celebration', 'elegant lighting', 'outdoor gathering')
 - Prioritize visual and atmospheric keywords
 
-IMPORTANT: Always generate an ORIGINAL caption that enhances and transforms the input text.
+IMPORTANT: 
+- Always generate an ORIGINAL caption that enhances and transforms the input text
+- The caption must be clean text only - no explanations, no parentheses with notes, no comments
 
 Return ONLY valid JSON in this exact format:
 {
-  \"caption\": \"[Your creative, original caption - never copy input text]\",
+  \"caption\": \"[Your creative, original caption - clean text only, no explanations]\",
   \"video_keywords\": [\"visual keyword1\", \"visual keyword2\", \"visual keyword3\", \"atmospheric keyword4\", \"activity keyword5\"],
   \"content_analysis\": {
     \"type\": \"birthday|wedding|corporate|celebration|product|announcement|other\",
@@ -124,29 +129,38 @@ JSON:";
             $data = json_decode($response->getBody()->getContents(), true);
             $aiResponse = trim($data['response'] ?? '');
 
-            \Log::info('========== AI CONTENT ANALYSIS ==========');
-            \Log::info('Step 1: Original Input Text', [
-                'text' => $text,
-                'length' => strlen($text)
-            ]);
-            \Log::info('Step 2: AI Raw Response', [
-                'response' => $aiResponse,
-                'length' => strlen($aiResponse)
-            ]);
-
             // Parse JSON response
             if (!empty($aiResponse)) {
                 // Extract JSON from response
                 if (preg_match('/\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/s', $aiResponse, $matches)) {
                     $parsed = json_decode($matches[0], true);
                     if ($parsed && isset($parsed['caption'])) {
+                        // Clean the caption to remove any explanation text
+                        $caption = trim($parsed['caption']);
+                        
+                        // Remove explanatory text in parentheses
+                        $caption = preg_replace('/\s*\([^)]*\)\s*/u', '', $caption);
+                        
+                        // Remove common explanation patterns
+                        $explanationPatterns = [
+                            '/\s*\(This sentence is already grammatically correct\.?\)\s*/iu',
+                            '/\s*\(No corrections needed\.?\)\s*/iu',
+                            '/\s*\(Already correct\.?\)\s*/iu',
+                            '/\s*\(Grammatically correct\.?\)\s*/iu',
+                            '/\s*\(No changes needed\.?\)\s*/iu',
+                            '/\s*\(Correct as is\.?\)\s*/iu',
+                        ];
+                        
+                        foreach ($explanationPatterns as $pattern) {
+                            $caption = preg_replace($pattern, '', $caption);
+                        }
+                        
+                        // Clean up multiple spaces
+                        $caption = preg_replace('/\s+/', ' ', $caption);
+                        $caption = trim($caption);
+                        
+                        $parsed['caption'] = $caption;
                         $result = $parsed;
-                        \Log::info('Step 3: Successfully parsed AI content analysis', [
-                            'caption' => $result['caption'],
-                            'video_keywords' => $result['video_keywords'] ?? [],
-                            'content_type' => $result['content_analysis']['type'] ?? 'unknown',
-                            'tone' => $result['content_analysis']['tone'] ?? 'unknown'
-                        ]);
                     } else {
                         \Log::warning('AI returned invalid JSON structure', ['parsed' => $parsed]);
                     }
@@ -164,29 +178,9 @@ JSON:";
         
         // Step 2: If target language is not English, translate the caption
         if ($language !== 'en') {
-            \Log::info('Step 4: Preparing for Translation', [
-                'source_language' => 'en',
-                'target_language' => $language,
-                'caption_to_translate' => $result['caption']
-            ]);
-
             $result['caption'] = $this->translateWithGoogle($result['caption'], $language, 'en');
-
-            \Log::info('Step 5: Translation Complete', [
-                'target_language' => $language,
-                'translated_caption' => $result['caption'],
-                'video_keywords_unchanged' => $result['video_keywords'] // Keywords stay in English for better search
-            ]);
-            \Log::info('========== END CONTENT ANALYSIS ==========');
-
             return $result;
         }
-
-        \Log::info('Step 4: No Translation Needed (English)', [
-            'returning_caption' => $result['caption'],
-            'video_keywords' => $result['video_keywords']
-        ]);
-        \Log::info('========== END CONTENT ANALYSIS ==========');
 
         return $result;
     }
@@ -246,15 +240,6 @@ JSON:";
             $data = json_decode($response->getBody()->getContents(), true);
             $aiResponse = trim($data['response'] ?? '');
             
-            \Log::info('========== AI DETAIL EXTRACTION ==========');
-            \Log::info('Step 1: Original Input Text', [
-                'text' => $text,
-                'length' => strlen($text)
-            ]);
-            \Log::info('Step 2: AI Extraction Response (English)', [
-                'response' => $aiResponse,
-                'length' => strlen($aiResponse)
-            ]);
             
             // Try to extract JSON from the response (handle both clean JSON and text with JSON)
             if (preg_match('/\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/s', $aiResponse, $matches)) {
@@ -269,11 +254,6 @@ JSON:";
                         }
                     }
                     
-                    \Log::info('Step 3: AI Extracted English Lines', [
-                        'lines' => $englishLines,
-                        'count' => count($englishLines)
-                    ]);
-                    
                     // If we got at least one line, apply grammar checking then translate if needed
                     if (!empty($englishLines)) {
                         // Apply AI grammar checking to each extracted line
@@ -282,52 +262,23 @@ JSON:";
                             $englishLines[$lineKey] = $this->grammarService->checkGrammar($lineText, 'en');
 
                             if ($originalLine !== $englishLines[$lineKey]) {
-                                \Log::info("Grammar corrected for {$lineKey}", [
-                                    'original' => $originalLine,
-                                    'corrected' => $englishLines[$lineKey]
-                                ]);
+                                // Grammar was corrected
                             }
                         }
 
                         // Step 2: If target language is not English, translate each line
                         if ($language !== 'en') {
                             $totalLines = count($englishLines);
-                            \Log::info('Step 4: Translating Each Line', [
-                                'source_language' => 'en',
-                                'target_language' => $language,
-                                'total_lines' => $totalLines
-                            ]);
                             
                             $translatedLines = [];
                             $lineNumber = 1;
                             foreach ($englishLines as $lineKey => $englishText) {
-                                \Log::info("Translating Line {$lineNumber}/{$totalLines}", [
-                                    'line_key' => $lineKey,
-                                    'english_text' => $englishText
-                                ]);
-                                
                                 $translatedLines[$lineKey] = $this->translateWithGoogle($englishText, $language, 'en');
-                                
-                                \Log::info("Line {$lineNumber} Translated", [
-                                    'line_key' => $lineKey,
-                                    'translated_text' => $translatedLines[$lineKey]
-                                ]);
-                                
                                 $lineNumber++;
                             }
                             
-                            \Log::info('Step 5: All Lines Translated', [
-                                'translated_lines' => $translatedLines
-                            ]);
-                            \Log::info('========== END DETAIL EXTRACTION ==========');
-                            
                             return $translatedLines;
                         }
-                        
-                        \Log::info('Step 4: No Translation Needed (English)', [
-                            'returning_lines' => $englishLines
-                        ]);
-                        \Log::info('========== END DETAIL EXTRACTION ==========');
                         
                         return $englishLines;
                     }
@@ -607,10 +558,6 @@ JSON:";
     private function translateWithGoogle(string $text, string $targetLanguage, string $sourceLanguage = 'en'): string
     {
         if (!$this->useGoogleTranslate || $sourceLanguage === $targetLanguage) {
-            \Log::info('Google Translate: Skipped', [
-                'reason' => $sourceLanguage === $targetLanguage ? 'Same language' : 'Disabled in config',
-                'text' => $text
-            ]);
             return $text;
         }
         
@@ -618,28 +565,10 @@ JSON:";
             // Pre-process text for better translations
             $processedText = $this->preprocessForTranslation($text, $targetLanguage);
 
-            \Log::info('>>> GOOGLE TRANSLATE REQUEST <<<', [
-                'source_language' => $sourceLanguage,
-                'target_language' => $targetLanguage,
-                'original_text' => $text,
-                'processed_text' => $processedText,
-                'input_length' => strlen($processedText),
-                'input_encoding' => mb_detect_encoding($processedText)
-            ]);
-
             $translator = new GoogleTranslate($targetLanguage);
             $translator->setSource($sourceLanguage);
 
             $translated = $translator->translate($processedText);
-            
-            \Log::info('>>> GOOGLE TRANSLATE RESPONSE <<<', [
-                'source_language' => $sourceLanguage,
-                'target_language' => $targetLanguage,
-                'output_text' => $translated,
-                'output_length' => strlen($translated),
-                'output_encoding' => mb_detect_encoding($translated),
-                'has_unicode' => preg_match('/[\x{0080}-\x{FFFF}]/u', $translated) ? 'YES' : 'NO'
-            ]);
 
             // Print exact Google Translate output to console
             echo "\n=== GOOGLE TRANSLATE OUTPUT ===\n";

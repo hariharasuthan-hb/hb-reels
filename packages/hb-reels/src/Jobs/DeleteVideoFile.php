@@ -37,16 +37,6 @@ class DeleteVideoFile implements ShouldQueue
         try {
             if (Storage::disk($this->disk)->exists($this->filePath)) {
                 Storage::disk($this->disk)->delete($this->filePath);
-                Log::info('Video file deleted via queued job', [
-                    'disk' => $this->disk,
-                    'path' => $this->filePath,
-                    'job_id' => $this->job->getJobId()
-                ]);
-            } else {
-                Log::info('Video file already deleted or not found', [
-                    'disk' => $this->disk,
-                    'path' => $this->filePath
-                ]);
             }
         } catch (\Exception $e) {
             Log::error('Failed to delete video file via queued job', [

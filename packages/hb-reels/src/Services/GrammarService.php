@@ -65,11 +65,6 @@ class GrammarService
             $corrected = $this->checkWithOllama($text, $language);
             
             if ($corrected && $corrected !== $text) {
-                Log::info('Grammar corrected with Ollama', [
-                    'original' => $text,
-                    'corrected' => $corrected,
-                    'language' => $language
-                ]);
                 return $corrected;
             }
             
@@ -77,23 +72,12 @@ class GrammarService
             if ($this->useGoogleAPI) {
                 $corrected = $this->checkWithGoogle($text, $language);
                 if ($corrected && $corrected !== $text) {
-                    Log::info('Grammar corrected with Google API', [
-                        'original' => $text,
-                        'corrected' => $corrected,
-                        'language' => $language
-                    ]);
                     return $corrected;
                 }
             }
             
             // Final fallback to basic corrections
             $corrected = $this->basicCorrections($text, $language);
-            Log::info('Applied basic grammar corrections', [
-                'original' => $text,
-                'corrected' => $corrected,
-                'language' => $language
-            ]);
-            
             return $corrected;
             
         } catch (\Exception $e) {
@@ -119,7 +103,8 @@ class GrammarService
             
             $languageName = $this->supportedLanguages[$language] ?? 'English';
             
-            $prompt = "Please check and correct the grammar of this {$languageName} text. Only return the corrected text without any explanations or additional comments:\n\n\"{$text}\"";
+            // More strict prompt to prevent explanations
+            $prompt = "Correct the grammar of this {$languageName} text. Return ONLY the corrected text, nothing else. No explanations, no comments, no parentheses, no notes. Just the corrected text:\n\n{$text}";
             
             $response = $this->client->post($ollamaUrl . '/api/generate', [
                 'json' => [
@@ -140,6 +125,98 @@ class GrammarService
             // Remove quotes if they were added by the AI
             $corrected = preg_replace('/^["\']|["\']$/u', '', $corrected);
             
+            // AGGRESSIVE CLEANUP: Remove all explanatory text patterns
+            
+            // Remove any text in parentheses (explanations are often in parentheses)
+            $corrected = preg_replace('/\s*\([^)]*\)\s*/u', '', $corrected);
+            
+            // Remove any text in square brackets
+            $corrected = preg_replace('/\s*\[[^\]]*\]\s*/u', '', $corrected);
+            
+            // Remove common explanation patterns (case-insensitive, with or without parentheses)
+            $explanationPatterns = [
+                '/\s*\(?\s*This\s+sentence\s+is\s+already\s+grammatically\s+correct\.?\s*\)?\s*/iu',
+                '/\s*\(?\s*No\s+corrections?\s+needed\.?\s*\)?\s*/iu',
+                '/\s*\(?\s*Already\s+correct\.?\s*\)?\s*/iu',
+                '/\s*\(?\s*Grammatically\s+correct\.?\s*\)?\s*/iu',
+                '/\s*\(?\s*No\s+changes?\s+needed\.?\s*\)?\s*/iu',
+                '/\s*\(?\s*Correct\s+as\s+is\.?\s*\)?\s*/iu',
+                '/\s*\(?\s*The\s+text\s+is\s+already\s+correct\.?\s*\)?\s*/iu',
+                '/\s*\(?\s*No\s+grammar\s+errors\.?\s*\)?\s*/iu',
+            ];
+            
+            foreach ($explanationPatterns as $pattern) {
+                $corrected = preg_replace($pattern, '', $corrected);
+            }
+            
+            // Split by sentences and filter out explanation-like sentences
+            $sentences = preg_split('/[.!?]+/', $corrected, -1, PREG_SPLIT_NO_EMPTY);
+            $validSentences = [];
+            
+            foreach ($sentences as $sentence) {
+                $sentence = trim($sentence);
+                if (empty($sentence)) {
+                    continue;
+                }
+                
+                // Skip sentences that are clearly explanations
+                $lowerSentence = strtolower($sentence);
+                if (preg_match('/^(this|the|it|that)\s+(sentence|text|phrase)\s+(is|are|was|were|has|have|already)/iu', $lowerSentence)) {
+                    continue;
+                }
+                if (preg_match('/^(already|correct|grammatically|no\s+corrections?|no\s+changes?|the\s+text\s+is)/iu', $lowerSentence)) {
+                    continue;
+                }
+                if (preg_match('/\b(already\s+correct|grammatically\s+correct|no\s+corrections?|no\s+changes?)\b/iu', $lowerSentence)) {
+                    continue;
+                }
+                
+                // If the sentence is the original text, keep it
+                if (stripos($sentence, $text) !== false || stripos($text, $sentence) !== false) {
+                    $validSentences[] = $sentence;
+                    continue;
+                }
+                
+                // Keep sentences that are reasonable length and don't look like explanations
+                if (strlen($sentence) > 5 && strlen($sentence) < 200) {
+                    $validSentences[] = $sentence;
+                }
+            }
+            
+            $corrected = implode('. ', $validSentences);
+            $corrected = trim($corrected);
+            
+            // If the corrected text contains the original text, prefer the original
+            // This handles cases where AI returns: "Original text. (Explanation)"
+            if (stripos($corrected, $text) !== false) {
+                // Extract just the part that matches the original
+                $textStart = stripos($corrected, $text);
+                if ($textStart === 0) {
+                    // If it starts with original text, take just that part
+                    $corrected = substr($corrected, 0, strlen($text));
+                } else {
+                    // If original is in the middle, try to extract it
+                    $before = substr($corrected, 0, $textStart);
+                    $after = substr($corrected, $textStart + strlen($text));
+                    // If what's before looks like explanation, use just original
+                    if (preg_match('/explanation|note|comment|correct|grammar/iu', $before)) {
+                        $corrected = $text;
+                    }
+                }
+            }
+            
+            // Final cleanup: remove multiple spaces
+            $corrected = preg_replace('/\s+/', ' ', $corrected);
+            $corrected = trim($corrected);
+            
+            // If after all cleaning we have nothing meaningful, return null to use original
+            if (empty($corrected) || 
+                strlen($corrected) < strlen($text) * 0.3 || 
+                $corrected === $text) {
+                // If it's the same as original or too short, return null (will use original)
+                return null;
+            }
+            
             return $corrected ?: null;
             
         } catch (\Exception $e) {
@@ -158,7 +235,6 @@ class GrammarService
     {
         // Note: Google Language API would require API key and proper implementation
         // For now, return null to use fallback
-        Log::info('Google API grammar check not implemented yet');
         return null;
     }
 

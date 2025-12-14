@@ -44,11 +44,6 @@ class GenerateVideoReel implements ShouldQueue
     public function handle(): void
     {
         try {
-            Log::info('Starting video reel generation job', [
-                'user_id' => $this->userId,
-                'job_id' => $this->job->getJobId()
-            ]);
-
             $aiService = app(AIService::class);
             $grammarService = app(\HbReels\EventReelGenerator\Services\GrammarService::class);
             $pexelsService = app(PexelsService::class);
@@ -57,29 +52,17 @@ class GenerateVideoReel implements ShouldQueue
             $eventText = $this->data['event_text'];
             $showFlyer = $this->data['show_flyer'] ?? false;
 
+            // Remove emojis and icons from the description before processing
+            $eventText = $this->removeEmojisAndIcons($eventText);
+
             // AI-powered spell check and grammar correction
             $originalText = $eventText;
             $eventText = $grammarService->checkGrammar($eventText);
-
-            Log::info('AI Grammar Check Applied', [
-                'user_id' => $this->userId,
-                'original_text' => $originalText,
-                'corrected_text' => $eventText,
-                'text_changed' => $originalText !== $eventText
-            ]);
 
             // Generate AI caption and video search optimization
             $contentAnalysis = $aiService->generateCaption($eventText);
             $caption = $contentAnalysis['caption'];
             $videoKeywords = $contentAnalysis['video_keywords'] ?? [];
-
-            Log::info('AI Content Analysis Complete', [
-                'user_id' => $this->userId,
-                'caption' => $caption,
-                'video_keywords' => $videoKeywords,
-                'content_type' => $contentAnalysis['content_analysis']['type'] ?? 'unknown',
-                'tone' => $contentAnalysis['content_analysis']['tone'] ?? 'unknown'
-            ]);
 
             // Extract structured details from text using AI (handles any content type)
             $contentDetails = $aiService->extractEventDetails($eventText);
@@ -87,38 +70,107 @@ class GenerateVideoReel implements ShouldQueue
             // Format overlay text from extracted details
             $overlayText = $this->formatContentOverlay($contentDetails);
 
-            // Get stock video from Pexels using optimized keywords
-            $videoSearchTerm = $this->createOptimalVideoSearch($caption, $videoKeywords);
-            Log::info('Starting Pexels video download', [
-                'user_id' => $this->userId,
-                'caption' => $caption,
-                'optimized_search' => $videoSearchTerm,
-                'ai_keywords' => $videoKeywords
-            ]);
-            $stockVideoPath = $pexelsService->downloadVideo($videoSearchTerm);
+            // Split caption into lines to determine if we need multiple videos
+            $captionLines = preg_split('/\r\n|\r|\n/', $overlayText, -1, PREG_SPLIT_NO_EMPTY);
+            $captionLines = array_filter($captionLines, fn($line) => !empty(trim($line)));
+            $captionLineCount = count($captionLines);
 
-            // Determine what to show in the video:
-            // - If showFlyer is TRUE: Show flyer only, no captions
-            // - If showFlyer is FALSE and flyer exists: Show flyer + captions overlay
-            // - If showFlyer is FALSE and no flyer: Show stock video + captions
+            // Check if multiple videos feature is enabled
+            $enableMultipleVideos = config('eventreel.video.enable_multiple_videos', false);
 
-            $displayFlyerPath = $this->flyerPath; // Always use flyer if it exists (background)
-            $displayCaption = $showFlyer ? null : $overlayText; // Only hide caption if checkbox is checked
+            // If multiple videos is enabled, generate exactly 3 videos with COMMON FULL CAPTION on all three
+            // Each video will use different Pexels video for variety, but all show the same full caption
+            if ($enableMultipleVideos) {
+                $videoSegments = [];
+                $tempVideoPaths = [];
 
-            Log::info('Rendering video', [
-                'user_id' => $this->userId,
-                'showFlyer_checkbox' => $showFlyer,
-                'flyerPath_exists' => $this->flyerPath ? 'yes' : 'no',
-                'displayFlyerPath' => $displayFlyerPath ? 'yes' : 'no',
-                'displayCaption' => $displayCaption,
-            ]);
+                // Always generate exactly 3 videos when multiple videos is enabled
+                $numberOfVideos = 3;
+                
+                // Generate exactly 3 videos, each with different Pexels video but SAME full caption
+                for ($i = 0; $i < $numberOfVideos; $i++) {
+                    $lineNumber = $i + 1;
+                    
+                    // For video search variety: use different caption lines if available, otherwise use full caption
+                    // This helps get different videos from Pexels, but the displayed caption will be the same for all
+                    if ($captionLineCount > 0 && isset($captionLines[$i])) {
+                        $captionLineForSearch = $captionLines[$i];
+                    } elseif ($captionLineCount > 0) {
+                        // Cycle through available lines if we have fewer than 3
+                        $captionLineForSearch = $captionLines[$i % $captionLineCount];
+                    } else {
+                        // Use full caption for search if no lines available
+                        $captionLineForSearch = $overlayText;
+                    }
 
-            // Render final video
-            $outputPath = $videoRenderer->render(
-                stockVideoPath: $stockVideoPath,
-                flyerPath: $displayFlyerPath,
-                caption: $displayCaption
-            );
+                    // Create search term for video variety (different videos from Pexels)
+                    $lineSearchTerm = $this->createOptimalVideoSearch($captionLineForSearch, $videoKeywords);
+                    
+                    // Use different page number to get different videos from Pexels
+                    $stockVideoPath = $pexelsService->downloadVideo($lineSearchTerm, $lineNumber);
+                    $tempVideoPaths[] = $stockVideoPath;
+
+                    // Determine what to show for this segment
+                    $displayFlyerPath = $this->flyerPath;
+                    // IMPORTANT: Use COMMON FULL CAPTION for all three videos (not individual lines)
+                    $displayCaption = $showFlyer ? null : $overlayText; // Same full caption on all three videos
+
+                    // Render video segment with common full caption
+                    $segmentPath = $videoRenderer->render(
+                        stockVideoPath: $stockVideoPath,
+                        flyerPath: $displayFlyerPath,
+                        caption: $displayCaption
+                    );
+
+                    $videoSegments[] = $segmentPath;
+                }
+
+                // Concatenate all video segments into one final video
+                if (count($videoSegments) !== 3) {
+                    Log::error('Multiple video generation failed: Expected 3 segments but got ' . count($videoSegments), [
+                        'user_id' => $this->userId,
+                        'segments_count' => count($videoSegments)
+                    ]);
+                }
+                
+                $outputPath = $this->concatenateVideos($videoSegments, $videoRenderer);
+                
+                // Clean up segment files
+                foreach ($videoSegments as $segmentPath) {
+                    Storage::disk(config('eventreel.storage.disk'))->delete($segmentPath);
+                }
+                foreach ($tempVideoPaths as $tempPath) {
+                    Storage::disk(config('eventreel.storage.disk'))->delete($tempPath);
+                }
+
+            } else {
+                // Single video mode: Use one video for all captions
+                // This applies when:
+                // - Only one caption line exists, OR
+                // - Multiple videos feature is disabled (ENABLE_MULTIPLE_VIDEO=false)
+                $videoSearchTerm = $this->createOptimalVideoSearch($caption, $videoKeywords);
+                $stockVideoPath = $pexelsService->downloadVideo($videoSearchTerm);
+
+                // Determine what to show in the video:
+                // - If showFlyer is TRUE: Show flyer only, no captions
+                // - If showFlyer is FALSE and flyer exists: Show flyer + captions overlay
+                // - If showFlyer is FALSE and no flyer: Show stock video + captions
+
+                $displayFlyerPath = $this->flyerPath; // Always use flyer if it exists (background)
+                $displayCaption = $showFlyer ? null : $overlayText; // Only hide caption if checkbox is checked
+
+                // Render final video
+                $outputPath = $videoRenderer->render(
+                    stockVideoPath: $stockVideoPath,
+                    flyerPath: $displayFlyerPath,
+                    caption: $displayCaption
+                );
+
+                // Clean up temp video
+                if ($stockVideoPath) {
+                    Storage::disk(config('eventreel.storage.disk'))->delete($stockVideoPath);
+                }
+            }
 
             // Log video generation activity
             $videoFilename = basename($outputPath);
@@ -142,19 +194,9 @@ class GenerateVideoReel implements ShouldQueue
             if ($this->flyerPath) {
                 Storage::disk(config('eventreel.storage.disk'))->delete($this->flyerPath);
             }
-            if ($stockVideoPath) {
-                Storage::disk(config('eventreel.storage.disk'))->delete($stockVideoPath);
-            }
 
             // Note: Cleanup is now handled by CleanupDownloadedVideo job when user downloads
             // Undownloaded videos will be cleaned up by scheduled cleanup jobs
-
-            Log::info('Video generation completed successfully', [
-                'user_id' => $this->userId,
-                'output_path' => $outputPath,
-                'video_size' => $videoSize,
-                'job_id' => $this->job->getJobId()
-            ]);
 
         } catch (\Exception $e) {
             Log::error('Video generation job failed', [
@@ -208,6 +250,67 @@ class GenerateVideoReel implements ShouldQueue
     }
 
     /**
+     * Concatenate multiple video segments into one final video.
+     */
+    private function concatenateVideos(array $videoPaths, VideoRenderer $videoRenderer): string
+    {
+        $disk = config('eventreel.storage.disk');
+        $ffmpegPath = config('eventreel.ffmpeg.path', 'ffmpeg');
+        $outputPath = config('eventreel.storage.output_path') . '/' . Str::random(40) . '.mp4';
+        $outputFullPath = Storage::disk($disk)->path($outputPath);
+
+        // Ensure output directory exists
+        $outputDir = dirname($outputFullPath);
+        if (!is_dir($outputDir)) {
+            mkdir($outputDir, 0755, true);
+        }
+
+        // Create file list for FFmpeg concat
+        $fileListPath = storage_path('app/temp/concat_' . Str::random(20) . '.txt');
+        $fileListDir = dirname($fileListPath);
+        if (!is_dir($fileListDir)) {
+            mkdir($fileListDir, 0755, true);
+        }
+
+        $fileListContent = '';
+        foreach ($videoPaths as $videoPath) {
+            $fullVideoPath = Storage::disk($disk)->path($videoPath);
+            // Escape single quotes and backslashes for FFmpeg concat format
+            $escapedPath = str_replace(['\'', '\\'], ['\\\'', '\\\\'], $fullVideoPath);
+            $fileListContent .= "file '{$escapedPath}'\n";
+        }
+
+        file_put_contents($fileListPath, $fileListContent);
+
+        // Build FFmpeg concat command
+        $command = sprintf(
+            '%s -f concat -safe 0 -i %s -c copy %s',
+            escapeshellarg($ffmpegPath),
+            escapeshellarg($fileListPath),
+            escapeshellarg($outputFullPath)
+        );
+
+
+        // Execute FFmpeg
+        exec($command . ' 2>&1', $output, $returnCode);
+
+        // Clean up file list
+        @unlink($fileListPath);
+
+        if ($returnCode !== 0) {
+            Log::error('Video concatenation failed', [
+                'user_id' => $this->userId,
+                'error' => implode("\n", $output),
+                'return_code' => $returnCode
+            ]);
+            throw new \Exception('Video concatenation failed: ' . implode("\n", $output));
+        }
+
+
+        return $outputPath;
+    }
+
+    /**
      * Create optimal video search term using AI-generated keywords.
      */
     private function createOptimalVideoSearch(string $caption, array $videoKeywords): string
@@ -250,6 +353,50 @@ class GenerateVideoReel implements ShouldQueue
         });
 
         return implode(' ', array_slice($keywords, 0, 3)) ?: 'celebration event';
+    }
+
+    /**
+     * Remove emojis and icons from text.
+     * This prevents errors in AI processing and FFmpeg rendering.
+     */
+    private function removeEmojisAndIcons(string $text): string
+    {
+        // Remove emojis (Unicode emoji ranges)
+        // This covers most emoji ranges including:
+        // - Emoticons (😀-🙏)
+        // - Symbols & Pictographs (🌀-🗿)
+        // - Transport & Map Symbols (🚀-🛿)
+        // - Supplemental Symbols (🔼-🆎)
+        // - Symbols & Pictographs Extended-A (🰀-🿿)
+        // - And more
+        $text = preg_replace('/[\x{1F300}-\x{1F9FF}]/u', '', $text); // Miscellaneous Symbols and Pictographs
+        $text = preg_replace('/[\x{1F600}-\x{1F64F}]/u', '', $text); // Emoticons
+        $text = preg_replace('/[\x{1F300}-\x{1F5FF}]/u', '', $text); // Miscellaneous Symbols and Pictographs
+        $text = preg_replace('/[\x{1F680}-\x{1F6FF}]/u', '', $text); // Transport and Map Symbols
+        $text = preg_replace('/[\x{1F1E0}-\x{1F1FF}]/u', '', $text); // Flags
+        $text = preg_replace('/[\x{2600}-\x{26FF}]/u', '', $text); // Miscellaneous Symbols
+        $text = preg_replace('/[\x{2700}-\x{27BF}]/u', '', $text); // Dingbats
+        $text = preg_replace('/[\x{FE00}-\x{FE0F}]/u', '', $text); // Variation Selectors
+        $text = preg_replace('/[\x{200D}]/u', '', $text); // Zero Width Joiner
+        $text = preg_replace('/[\x{1FA00}-\x{1FAFF}]/u', '', $text); // Symbols and Pictographs Extended-A
+        
+        // Remove common icon/symbol characters
+        $text = preg_replace('/[\x{2190}-\x{21FF}]/u', '', $text); // Arrows
+        $text = preg_replace('/[\x{2300}-\x{23FF}]/u', '', $text); // Miscellaneous Technical
+        $text = preg_replace('/[\x{2B00}-\x{2BFF}]/u', '', $text); // Miscellaneous Symbols and Arrows
+        $text = preg_replace('/[\x{25A0}-\x{25FF}]/u', '', $text); // Geometric Shapes
+        
+        // Remove other common special characters that might be used as icons
+        $text = str_replace(['★', '☆', '♥', '♦', '♣', '♠', '•', '○', '●', '■', '□', '▲', '△', '▼', '▽'], '', $text);
+        $text = str_replace(['→', '←', '↑', '↓', '↔', '⇒', '⇐', '⇑', '⇓'], '', $text);
+        $text = str_replace(['✓', '✗', '✘', '✕', '✖', '✗', '✚', '✛', '✜', '✝', '✞', '✟'], '', $text);
+        $text = str_replace(['©', '®', '™', '℠', '℗'], '', $text);
+        
+        // Clean up multiple spaces and trim
+        $text = preg_replace('/\s+/', ' ', $text);
+        $text = trim($text);
+        
+        return $text;
     }
 
     /**

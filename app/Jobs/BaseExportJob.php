@@ -52,23 +52,12 @@ abstract class BaseExportJob implements ShouldQueue
     public function handle(): void
     {
         try {
-            Log::info("Starting export job", [
-                'type' => $this->exportType,
-                'user_id' => $this->userId,
-                'format' => $this->format,
-            ]);
-
             $data = $this->getData();
             $filename = $this->generateFilename();
             $filepath = $this->generateFile($data, $filename);
 
             // Store export record
             $this->storeExportRecord($filename, $filepath);
-
-            Log::info("Export job completed", [
-                'type' => $this->exportType,
-                'filename' => $filename,
-                'filepath' => $filepath,
             ]);
         } catch (\Exception $e) {
             Log::error("Export job failed", [

@@ -51,11 +51,6 @@ class ReelController
      */
     public function checkStatus()
     {
-        \Log::info('Status endpoint called', [
-            'user_authenticated' => auth()->check(),
-            'user_id' => auth()->id()
-        ]);
-
         // Check if user is authenticated
         if (!auth()->check()) {
             \Log::warning('Status check failed: user not authenticated');
@@ -64,11 +59,6 @@ class ReelController
 
         // Get the timestamp of the current generation session
         $generationTimestamp = session('video_generation_timestamp');
-
-        \Log::info('Status check with session tracking', [
-            'user_id' => auth()->id(),
-            'generation_timestamp' => $generationTimestamp ? $generationTimestamp->toDateTimeString() : 'none'
-        ]);
 
         // Build query for completed videos
         $query = ActivityLog::where('user_id', auth()->id())
@@ -89,29 +79,11 @@ class ReelController
             ->filter(function ($video) {
                 // Verify file still exists
                 $exists = Storage::disk(config('eventreel.storage.disk'))->exists($video->video_path);
-                \Log::info('Checking video file existence', [
-                    'video_id' => $video->id,
-                    'path' => $video->video_path,
-                    'exists' => $exists
-                ]);
                 return $exists;
             });
 
-        \Log::info('Status check result', [
-            'user_id' => auth()->id(),
-            'completed_videos_count' => $completedVideos->count(),
-            'generation_timestamp' => $generationTimestamp ? $generationTimestamp->toDateTimeString() : 'none',
-            'status' => $completedVideos->isNotEmpty() ? 'ready' : 'none'
-        ]);
-
         if ($completedVideos->isNotEmpty()) {
             $latestVideo = $completedVideos->first();
-
-            \Log::info('Video ready for automatic download', [
-                'user_id' => auth()->id(),
-                'activity_log_id' => $latestVideo->id,
-                'video_path' => $latestVideo->video_path
-            ]);
 
             // Don't schedule cleanup here - it will be scheduled when download actually starts
             return response()->json([
@@ -127,11 +99,6 @@ class ReelController
             ->whereIn('status', ['queued'])
             ->where('created_at', '>=', now()->subHours(1))
             ->exists();
-
-        \Log::info('Processing check result', [
-            'user_id' => auth()->id(),
-            'has_processing' => $processingVideos
-        ]);
 
         if ($processingVideos) {
             return response()->json(['status' => 'processing']);
@@ -182,11 +149,6 @@ class ReelController
             'file_path' => $activityLog->video_path
         ])->delay(now()->addSeconds(30));
 
-        \Log::info('Download initiated, cleanup scheduled', [
-            'activity_log_id' => $activityLog->id,
-            'user_id' => auth()->id(),
-            'cleanup_scheduled' => now()->addSeconds(30)->toDateTimeString()
-        ]);
 
         // Clear the generation timestamp from session since download is starting
         session()->forget('video_generation_timestamp');
@@ -221,7 +183,36 @@ class ReelController
         }
 
         $request->validate([
-            'flyer_image' => 'nullable|image|mimes:jpeg,jpg,png|max:10240',
+            'flyer_image' => [
+                'nullable',
+                'image',
+                'mimes:jpeg,jpg,png',
+                'max:10240',
+                function ($attribute, $value, $fail) {
+                    if ($value) {
+                        // Get image dimensions
+                        $imageInfo = getimagesize($value->getRealPath());
+                        if ($imageInfo) {
+                            $width = $imageInfo[0];
+                            $height = $imageInfo[1];
+                            
+                            // Minimum dimensions for flyer (to ensure caption fits properly)
+                            $minWidth = 600;  // Minimum 600px width
+                            $minHeight = 800; // Minimum 800px height (portrait orientation)
+                            
+                            if ($width < $minWidth || $height < $minHeight) {
+                                $fail("The flyer image must be at least {$minWidth}x{$minHeight} pixels. Your image is {$width}x{$height} pixels.");
+                            }
+                            
+                            // Check aspect ratio - prefer portrait orientation (height > width)
+                            $aspectRatio = $height / $width;
+                            if ($aspectRatio < 1.2) {
+                                $fail("The flyer image should be in portrait orientation (height should be at least 1.2x the width) for best results.");
+                            }
+                        }
+                    }
+                },
+            ],
             'event_text' => 'nullable|string|max:2000',
             'show_flyer' => 'nullable|boolean',
             'access_code' => 'nullable|string',
@@ -264,13 +255,6 @@ class ReelController
                 'workout_summary' => 'Queued event reel generation: ' . $eventText,
                 'check_in_method' => 'web',
                 'status' => 'queued'
-            ]);
-
-            \Log::info('Video generation job queued', [
-                'user_id' => auth()->id(),
-                'event_text' => $eventText,
-                'flyer_provided' => $flyerPath ? 'yes' : 'no',
-                'generation_timestamp' => $generationTimestamp
             ]);
 
             // Return success response - stay on same page with processing message

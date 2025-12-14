@@ -9,7 +9,8 @@
             <div>
                 <h3 class="text-2xl font-bold mb-4">{{ $siteTitle }}</h3>
                 <p class="text-gray-400">
-                    Your trusted partner in fitness and wellness journey.
+                Innovate with our Reel Generator, educate with our platform, and elevate your business.
+                Your all-in-one partner for content, learning, and IT solutions.
                 </p>
                 @if($siteSettings->facebook_url || $siteSettings->twitter_url || $siteSettings->instagram_url || $siteSettings->linkedin_url)
                     <div class="mt-4 flex space-x-4">
@@ -54,7 +55,14 @@
                             </li>
                         @endif
                     @endforeach
-                    <li><a href="{{ route('frontend.register') }}" class="text-gray-400 hover:text-white transition">Register</a></li>
+                    @guest
+                        <li>
+                            <a href="{{ route('frontend.register') }}"
+                            class="text-gray-400 hover:text-white transition">
+                                Register
+                            </a>
+                        </li>
+                    @endguest                
                 </ul>
             </div>
             

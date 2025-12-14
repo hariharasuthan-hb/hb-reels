@@ -69,12 +69,6 @@ class CleanupVideosCommand extends Command
                     $this->info("✅ Would clean up {$cleanedCount} files ({$sizeFormatted})");
                 } else {
                     $this->info("✅ Cleaned up {$cleanedCount} files ({$sizeFormatted})");
-                    Log::info('Manual video cleanup completed', [
-                        'files_cleaned' => $cleanedCount,
-                        'space_freed_bytes' => $totalSize,
-                        'temp_path' => $tempPath,
-                        'output_path' => $outputPath
-                    ]);
                 }
             } else {
                 $this->info("✨ No old files to clean up");
