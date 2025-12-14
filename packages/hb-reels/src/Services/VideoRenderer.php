@@ -359,21 +359,20 @@ class VideoRenderer
             $fontFile = $this->getFontForLanguage($language);
             $currentY = $yStart;
 
-            // Count non-empty lines for proper labeling
+            // Filter out empty lines first to get accurate count
             $nonEmptyLines = array_filter($lines, function($line) {
                 return trim($line) !== '';
             });
+            $nonEmptyLines = array_values($nonEmptyLines); // Re-index array
             $totalNonEmptyLines = count($nonEmptyLines);
 
-            $lineIndex = 0;
             $processedLineIndex = 0;
             $lastTextLabel = '[v]'; // Initialize - will be updated in loop
-            foreach ($lines as $line) {
-                // Skip empty lines
-                if (trim($line) === '') {
-                    continue;
-                }
-
+            
+            // Only process if we have non-empty lines
+            if ($totalNonEmptyLines > 0) {
+                // Process only non-empty lines
+                foreach ($nonEmptyLines as $line) {
                 // Escape special characters for FFmpeg drawtext filter text parameter
                 // CRITICAL: Must escape commas, colons, quotes, and backslashes
                 // We use SINGLE QUOTES for text parameter to avoid quote escaping issues
@@ -433,10 +432,11 @@ class VideoRenderer
                     );
                 }
 
-                $currentY += $yStep;
-                $processedLineIndex++;
-                $lineIndex++;
+                    $currentY += $yStep;
+                    $processedLineIndex++;
+                }
             }
+            // If no caption or all lines were empty, $lastTextLabel remains '[v]'
         } else {
             $lastTextLabel = '[v]';
         }

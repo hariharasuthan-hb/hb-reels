@@ -78,17 +78,33 @@ class GenerateVideoReel implements ShouldQueue
             // Check if multiple videos feature is enabled
             $enableMultipleVideos = config('eventreel.video.enable_multiple_videos', false);
 
-            // If we have more than one caption line AND multiple videos is enabled, generate different videos for each
-            if ($captionLineCount > 1 && $enableMultipleVideos) {
+            // If multiple videos is enabled, generate exactly 3 videos with COMMON FULL CAPTION on all three
+            // Each video will use different Pexels video for variety, but all show the same full caption
+            if ($enableMultipleVideos) {
                 $videoSegments = [];
                 $tempVideoPaths = [];
 
-                // Generate a video for each caption line, but use FULL caption for all segments
-                foreach ($captionLines as $index => $captionLine) {
-                    $lineNumber = $index + 1;
+                // Always generate exactly 3 videos when multiple videos is enabled
+                $numberOfVideos = 3;
+                
+                // Generate exactly 3 videos, each with different Pexels video but SAME full caption
+                for ($i = 0; $i < $numberOfVideos; $i++) {
+                    $lineNumber = $i + 1;
+                    
+                    // For video search variety: use different caption lines if available, otherwise use full caption
+                    // This helps get different videos from Pexels, but the displayed caption will be the same for all
+                    if ($captionLineCount > 0 && isset($captionLines[$i])) {
+                        $captionLineForSearch = $captionLines[$i];
+                    } elseif ($captionLineCount > 0) {
+                        // Cycle through available lines if we have fewer than 3
+                        $captionLineForSearch = $captionLines[$i % $captionLineCount];
+                    } else {
+                        // Use full caption for search if no lines available
+                        $captionLineForSearch = $overlayText;
+                    }
 
-                    // Create search term specific to this caption line for video variety
-                    $lineSearchTerm = $this->createOptimalVideoSearch($captionLine, $videoKeywords);
+                    // Create search term for video variety (different videos from Pexels)
+                    $lineSearchTerm = $this->createOptimalVideoSearch($captionLineForSearch, $videoKeywords);
                     
                     // Use different page number to get different videos from Pexels
                     $stockVideoPath = $pexelsService->downloadVideo($lineSearchTerm, $lineNumber);
@@ -96,10 +112,10 @@ class GenerateVideoReel implements ShouldQueue
 
                     // Determine what to show for this segment
                     $displayFlyerPath = $this->flyerPath;
-                    // Use FULL caption (all lines) for all segments, not just single line
-                    $displayCaption = $showFlyer ? null : $overlayText; // Full caption for all segments
+                    // IMPORTANT: Use COMMON FULL CAPTION for all three videos (not individual lines)
+                    $displayCaption = $showFlyer ? null : $overlayText; // Same full caption on all three videos
 
-                    // Render video segment with full caption
+                    // Render video segment with common full caption
                     $segmentPath = $videoRenderer->render(
                         stockVideoPath: $stockVideoPath,
                         flyerPath: $displayFlyerPath,
@@ -110,6 +126,13 @@ class GenerateVideoReel implements ShouldQueue
                 }
 
                 // Concatenate all video segments into one final video
+                if (count($videoSegments) !== 3) {
+                    Log::error('Multiple video generation failed: Expected 3 segments but got ' . count($videoSegments), [
+                        'user_id' => $this->userId,
+                        'segments_count' => count($videoSegments)
+                    ]);
+                }
+                
                 $outputPath = $this->concatenateVideos($videoSegments, $videoRenderer);
                 
                 // Clean up segment files
