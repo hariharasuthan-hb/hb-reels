@@ -144,14 +144,6 @@ class EventReelServiceProvider extends ServiceProvider
                 }
             }
 
-            if ($filesCleaned > 0 || $recordsCleaned > 0) {
-                \Log::info('Cleaned up old video files and records', [
-                    'files_cleaned' => $filesCleaned,
-                    'records_cleaned' => $recordsCleaned,
-                    'temp_path' => $tempPath,
-                    'output_path' => $outputPath
-                ]);
-            }
 
         } catch (\Exception $e) {
             \Log::error('Failed to cleanup old video files and records', [

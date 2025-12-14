@@ -56,6 +56,7 @@ return [
         'fps' => 30,
         'format' => 'mp4',
         'font_path' => env('EVENTREEL_FONT_PATH', null), // Path to TTF font file for captions
+        'enable_multiple_videos' => env('ENABLE_MULTIPLE_VIDEO', false), // Generate multiple videos for multiple captions
     ],
 
     /*

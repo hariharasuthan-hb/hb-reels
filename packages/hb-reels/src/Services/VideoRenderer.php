@@ -130,12 +130,6 @@ class VideoRenderer
         }
     
         // Add caption text overlay if provided
-        \Log::info('VideoRenderer caption check', [
-            'caption_provided' => $caption ? 'yes' : 'no',
-            'caption_content' => $caption,
-            'flyerPath_provided' => $flyerPath ? 'yes' : 'no'
-        ]);
-
         if ($caption) {
             $caption = str_replace('\\n', "\n", $caption);
             $lines = preg_split('/\r\n|\r|\n/', $caption, -1, PREG_SPLIT_NO_EMPTY);
@@ -150,29 +144,88 @@ class VideoRenderer
                 'ar','fa','ur','th','my','km','lo'
             ]);
 
-            $maxCharsPerLine = $needsMaxLigatureSupport ? 20 : ($isNonLatin ? 30 : 40);
+            // Calculate available width for text
+            // If flyer exists, text should fit within flyer area accounting for border/padding
+            // Flyer is 80% of video width, but we need to account for border (typically 2-5% on each side)
+            // So text should use ~70% of video width to stay well within flyer border
+            // If no flyer, use full width minus side margins (10% on each side = 80% usable)
+            $availableWidth = $flyerPath 
+                ? intval($width * 0.70)  // Flyer is 80% width, text uses 70% to stay well within flyer border (5% margin on each side)
+                : intval($width * 0.85);  // No flyer: use 85% of width (7.5% margin on each side)
+            
+            // Estimate characters per line based on available width and font size
+            // Average character width varies by language and font size
+            // For Latin: ~0.6 * fontSize, for complex scripts: ~0.8 * fontSize
+            $avgCharWidth = $needsMaxLigatureSupport 
+                ? intval(56 * 0.8)  // Complex scripts: wider characters
+                : ($isNonLatin 
+                    ? intval(56 * 0.7)  // Non-Latin but simpler: medium width
+                    : intval(56 * 0.6)); // Latin: narrower characters
+            
+            // Calculate max chars based on available width
+            $calculatedMaxChars = max(15, intval($availableWidth / $avgCharWidth));
+            
+            // Apply language-specific limits (minimums for readability)
+            $languageMinChars = $needsMaxLigatureSupport ? 18 : ($isNonLatin ? 25 : 30);
+            $languageMaxChars = $needsMaxLigatureSupport ? 25 : ($isNonLatin ? 35 : 45);
+            
+            // Use calculated value but respect language limits
+            $maxCharsPerLine = max($languageMinChars, min($calculatedMaxChars, $languageMaxChars));
 
             $wrappedLines = [];
             foreach ($lines as $line) {
                 $lineLength = mb_strlen($line, 'UTF-8');
 
                 if ($lineLength > $maxCharsPerLine) {
-                    $words = explode(' ', $line);
+                    // Split by whitespace (handles multiple spaces, tabs, etc.)
+                    $words = preg_split('/\s+/', trim($line), -1, PREG_SPLIT_NO_EMPTY);
                     $currentLine = '';
 
                     foreach ($words as $word) {
-                        if (empty($currentLine)) {
-                            $currentLine = $word;
-                        } else {
-                            $testLine = $currentLine . ' ' . $word;
-                            if (mb_strlen($testLine, 'UTF-8') <= $maxCharsPerLine) {
-                                $currentLine = $testLine;
-                            } else {
+                        $wordLength = mb_strlen($word, 'UTF-8');
+                        
+                        // Handle very long words that exceed the limit
+                        if ($wordLength > $maxCharsPerLine) {
+                            // First, save current line if it has content
+                            if ($currentLine) {
                                 $wrappedLines[] = $currentLine;
+                                $currentLine = '';
+                            }
+                            
+                            // Break the long word into chunks
+                            $remainingWord = $word;
+                            while (mb_strlen($remainingWord, 'UTF-8') > $maxCharsPerLine) {
+                                // Break at 80% of max length for better readability
+                                $breakPoint = intval($maxCharsPerLine * 0.8);
+                                $chunk = mb_substr($remainingWord, 0, $breakPoint, 'UTF-8');
+                                $wrappedLines[] = $chunk;
+                                $remainingWord = mb_substr($remainingWord, $breakPoint, null, 'UTF-8');
+                            }
+                            
+                            // Add remaining part as current line
+                            if ($remainingWord) {
+                                $currentLine = $remainingWord;
+                            }
+                        } else {
+                            // Normal word processing
+                            if (empty($currentLine)) {
                                 $currentLine = $word;
+                            } else {
+                                $testLine = $currentLine . ' ' . $word;
+                                $testLength = mb_strlen($testLine, 'UTF-8');
+                                
+                                if ($testLength <= $maxCharsPerLine) {
+                                    $currentLine = $testLine;
+                                } else {
+                                    // Current line is full, start a new line
+                                    $wrappedLines[] = $currentLine;
+                                    $currentLine = $word;
+                                }
                             }
                         }
                     }
+                    
+                    // Add the last line if it has content
                     if ($currentLine) {
                         $wrappedLines[] = $currentLine;
                     }
@@ -219,20 +272,85 @@ class VideoRenderer
                 $yStep = 100;
             }
 
-            $totalTextHeight = ($lineCount * $yStep);
-            $maxHeight = $height - 400;
-
-            if ($totalTextHeight > $maxHeight) {
-                $yStep = intval($maxHeight / $lineCount);
-                $totalTextHeight = ($lineCount * $yStep);
-            }
-
+            // Calculate Y position for text
+            // If flyer exists, position text within flyer area accounting for border
+            // If no flyer, position in lower third of video (standard caption position)
             if ($flyerPath) {
-                $yStart = intval(($height - $totalTextHeight) / 2) + 60;
+                // Flyer is centered, so calculate text position within flyer bounds
+                // Flyer height is approximately 80% of video height when scaled
+                $flyerHeight = intval($height * 0.8);
+                $flyerTop = intval(($height - $flyerHeight) / 2);
+                $flyerBottom = $flyerTop + $flyerHeight;
+                
+                // Account for flyer border/padding (typically 3-5% of flyer dimensions)
+                // This ensures text stays well inside the flyer border
+                $flyerBorderPadding = intval($flyerHeight * 0.05); // 5% border/padding for safety
+                $flyerInnerTop = $flyerTop + $flyerBorderPadding;
+                $flyerInnerBottom = $flyerBottom - $flyerBorderPadding;
+                $flyerInnerHeight = $flyerInnerBottom - $flyerInnerTop;
+                
+                // Calculate available height for text (with margins)
+                $textTopMargin = 40; // Margin from top of inner flyer area
+                $textBottomMargin = 40; // Margin from bottom of inner flyer area
+                $maxAvailableHeight = $flyerInnerHeight - $textTopMargin - $textBottomMargin;
+                
+                // Check if text fits, if not, adjust font size and spacing
+                $initialTotalHeight = ($lineCount * $yStep);
+                if ($initialTotalHeight > $maxAvailableHeight && $lineCount > 0) {
+                    // Text is too tall, reduce spacing and font size proportionally
+                    $yStep = intval($maxAvailableHeight / $lineCount);
+                    $totalTextHeight = ($lineCount * $yStep);
+                    
+                    // Reduce font size proportionally to maintain readability
+                    $heightRatio = $maxAvailableHeight / max($initialTotalHeight, 1);
+                    $fontSize = max(32, intval($fontSize * $heightRatio)); // Minimum 32px
+                } else {
+                    $totalTextHeight = $initialTotalHeight;
+                }
+                
+                // Position text in lower portion of flyer inner area (bottom 45% of inner flyer area)
+                // This ensures text stays well within the flyer border
+                $textAreaTop = $flyerInnerTop + intval($flyerInnerHeight * 0.55);
+                $textAreaHeight = intval($flyerInnerHeight * 0.45);
+                
+                // Center text vertically within the text area
+                $yStart = $textAreaTop + intval(($textAreaHeight - $totalTextHeight) / 2);
+                
+                // Ensure text doesn't go below flyer inner area (respecting border)
+                $maxY = $flyerInnerBottom - $textBottomMargin;
+                if (($yStart + $totalTextHeight) > $maxY) {
+                    $yStart = $maxY - $totalTextHeight;
+                }
+                
+                // Ensure text doesn't go above flyer inner area
+                $minY = $flyerInnerTop + $textTopMargin;
+                if ($yStart < $minY) {
+                    $yStart = $minY;
+                }
+                
+                // Final validation: ensure all text fits within flyer inner bounds
+                if (($yStart + $totalTextHeight) > $flyerInnerBottom - $textBottomMargin) {
+                    // Last resort: position at top of text area
+                    $yStart = $flyerInnerTop + $textTopMargin;
+                    $totalTextHeight = min($totalTextHeight, $flyerInnerHeight - $textTopMargin - $textBottomMargin);
+                }
             } else {
+                // No flyer: center text vertically on screen
+                $totalTextHeight = ($lineCount * $yStep);
+                $maxHeight = $height - 200; // Leave 100px margin top and bottom
+
+                if ($totalTextHeight > $maxHeight && $lineCount > 0) {
+                    $yStep = intval($maxHeight / $lineCount);
+                    $totalTextHeight = ($lineCount * $yStep);
+                    // Reduce font size proportionally
+                    $heightRatio = $maxHeight / ($lineCount * 100); // Original yStep was ~100
+                    $fontSize = max(32, intval($fontSize * $heightRatio));
+                }
+                // Center text vertically on screen
                 $yStart = intval(($height - $totalTextHeight) / 2);
-                if ($yStart < 210) {
-                    $yStart = 210;
+                // Ensure minimum margin from top
+                if ($yStart < 100) {
+                    $yStart = 100;
                 }
             }
 
@@ -240,15 +358,6 @@ class VideoRenderer
             // ASS subtitles work great in VLC/MPC but QuickTime has limited subtitle support
             $fontFile = $this->getFontForLanguage($language);
             $currentY = $yStart;
-
-            \Log::info('Text positioning for drawtext', [
-                'line_count' => $lineCount,
-                'lines' => $lines,
-                'y_start' => $yStart,
-                'y_step' => $yStep,
-                'font_file' => $fontFile,
-                'language' => $language
-            ]);
 
             // Count non-empty lines for proper labeling
             $nonEmptyLines = array_filter($lines, function($line) {
@@ -258,24 +367,26 @@ class VideoRenderer
 
             $lineIndex = 0;
             $processedLineIndex = 0;
+            $lastTextLabel = '[v]'; // Initialize - will be updated in loop
             foreach ($lines as $line) {
                 // Skip empty lines
                 if (trim($line) === '') {
                     continue;
                 }
 
-                \Log::info("Processing line {$processedLineIndex} with drawtext", ['text' => $line, 'y_position' => $currentY]);
-
-                // Escape special characters for FFmpeg drawtext
-                $safe = $line;
-                // Remove single quotes as they can break the filter
-                $safe = str_replace("'", "", $safe);
-                // Escape colons with backslash
-                $safe = str_replace(':', '\\:', $safe);
-                // Escape other special characters that can cause issues
-                $safe = str_replace(['[', ']', ';', '\\'], ['\\[', '\\]', '\\;', '\\\\'], $safe);
-                // Handle newlines properly
-                $safe = str_replace(["\r\n", "\r", "\n"], '|', $safe);
+                // Escape special characters for FFmpeg drawtext filter text parameter
+                // CRITICAL: Must escape commas, colons, quotes, and backslashes
+                // We use SINGLE QUOTES for text parameter to avoid quote escaping issues
+                $safe = $this->escapeDrawtext($line);
+                
+                // Handle newlines - convert to space (FFmpeg drawtext doesn't support newlines in text parameter)
+                $safe = str_replace(["\r\n", "\r", "\n"], ' ', $safe);
+                
+                // Remove any control characters that might cause issues
+                $safe = preg_replace('/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/', '', $safe);
+                
+                // Clean up multiple spaces
+                $safe = preg_replace('/\s+/', ' ', trim($safe));
 
                 // Wrap long text manually (FFmpeg doesn't have auto text wrapping)
                 // Use higher limit for Unicode text (Tamil, etc.) since characters take more bytes
@@ -285,36 +396,37 @@ class VideoRenderer
                 $safe = $this->wrapText($safe, $wrapLimit);
 
                 // Create unique stream labels for each line to chain them properly
+                // IMPORTANT: Don't reuse [v] label - use unique labels for all filters
                 $inputLabel = $processedLineIndex === 0 ? '[v]' : "[v{$processedLineIndex}]";
-                // For the last non-empty line, output directly to [v] to connect to final processing
                 $isLastLine = $processedLineIndex === $totalNonEmptyLines - 1;
-                $outputLabel = $isLastLine ? '[v]' : "[v" . ($processedLineIndex + 1) . "]";
+                // Use a unique label for the last drawtext output, not [v]
+                $outputLabel = $isLastLine ? "[vtext{$processedLineIndex}]" : "[v" . ($processedLineIndex + 1) . "]";
+                
+                // Track the last output label for use in trim filter
+                $lastTextLabel = $outputLabel;
 
-                // Draw text with shadow and border for maximum visibility on any background
+                // Draw text centered on screen - NO background, NO box, NO shadow, NO border
+                // Use SINGLE QUOTES for text parameter - this is the safest approach
+                // Text is already escaped by escapeDrawtext() function
+                // Text is centered horizontally and vertically on screen
                 if ($fontFile && file_exists($fontFile)) {
                     $filters[] = sprintf(
                         "%sdrawtext=fontfile='%s':text='%s':fontsize=%d:fontcolor=white:" .
-                        "x=(w-text_w)/2:y=%d:" .
-                        "borderw=3:bordercolor=black:" .
-                        "shadowcolor=black@0.8:shadowx=2:shadowy=2:" .
-                        "box=0:boxcolor=black@0.5%s",
+                        "x=(w-text_w)/2:y=%d%s",
                         $inputLabel,
-                        $fontFile, // Don't use escapeshellarg here as it adds quotes
-                        $safe,
+                        $fontFile, // Font file path in single quotes
+                        $safe,      // Text in single quotes (already escaped)
                         $fontSize,
                         $currentY,
                         $outputLabel
                     );
                 } else {
-                    // Fallback to system font with more robust settings
+                    // Fallback to system font
                     $filters[] = sprintf(
                         "%sdrawtext=font='Arial':text='%s':fontsize=%d:fontcolor=white:" .
-                        "x=(w-text_w)/2:y=%d:" .
-                        "borderw=3:bordercolor=black:" .
-                        "shadowcolor=black@0.8:shadowx=2:shadowy=2:" .
-                        "box=0:boxcolor=black@0.5%s",
+                        "x=(w-text_w)/2:y=%d%s",
                         $inputLabel,
-                        $safe,
+                        $safe,      // Text in single quotes (already escaped)
                         $fontSize,
                         $currentY,
                         $outputLabel
@@ -325,29 +437,26 @@ class VideoRenderer
                 $processedLineIndex++;
                 $lineIndex++;
             }
-
-            // Final output is already connected to [v] from the last drawtext filter
+        } else {
+            $lastTextLabel = '[v]';
         }
-    
-        // Apply final video processing
-        $filters[] = '[v]trim=duration=' . $duration . ',setpts=PTS-STARTPTS,fps=' . $fps . '[vout]';
+        $filters[] = $lastTextLabel . 'trim=duration=' . $duration . ',setpts=PTS-STARTPTS,fps=' . $fps . '[vout]';
     
         $filterComplex = implode(';', $filters);
     
+        // Escape the filter_complex for shell execution
+        // CRITICAL: escapeshellarg() wraps in single quotes and escapes internal single quotes as '\''
+        // This is correct for shell safety, but FFmpeg can still parse it correctly
+        // The filter_complex string will be: '[0:v]...text='\''escaped text'\''...'
+        // FFmpeg sees: [0:v]...text='escaped text'... (the '\'' becomes just ' in the actual filter)
         $command = sprintf(
-            '%s %s -filter_complex "%s" -map "[vout]" -t %d -c:v libx264 -preset fast -crf 23 -pix_fmt yuv420p -movflags +faststart %s',
+            '%s %s -filter_complex %s -map "[vout]" -t %d -c:v libx264 -preset fast -crf 23 -pix_fmt yuv420p -movflags +faststart %s',
             escapeshellarg($ffmpegPath),
             implode(' ', $inputs),
-            $filterComplex,
+            escapeshellarg($filterComplex),
             $duration,
             escapeshellarg($outputPath)
         );
-    
-        \Log::info('========== FINAL FFMPEG COMMAND ==========');
-        \Log::info('FFmpeg command', [
-            'command_length' => strlen($command),
-            'full_command' => $command
-        ]);
     
         return $command;
     }
@@ -651,41 +760,21 @@ class VideoRenderer
         
         // 1. Exact match (highest priority)
         if ($foundFonts['exact']) {
-            \Log::info('Found EXACT MATCH font', [
-                'language' => $language,
-                'font_name' => $fontName,
-                'font_path' => $foundFonts['exact']
-            ]);
             return $foundFonts['exact'];
         }
         
         // 2. Regular font (preferred for all languages)
         if ($foundFonts['regular']) {
-            \Log::info('Found REGULAR font', [
-                'language' => $language,
-                'font_name' => $fontName,
-                'font_path' => $foundFonts['regular']
-            ]);
             return $foundFonts['regular'];
         }
         
         // 3. Medium font (fallback)
         if ($foundFonts['medium']) {
-            \Log::info('Found MEDIUM font', [
-                'language' => $language,
-                'font_name' => $fontName,
-                'font_path' => $foundFonts['medium']
-            ]);
             return $foundFonts['medium'];
         }
         
         // 4. Bold font (last resort fallback)
         if ($foundFonts['bold']) {
-            \Log::info('Found BOLD font (fallback)', [
-                'language' => $language,
-                'font_name' => $fontName,
-                'font_path' => $foundFonts['bold']
-            ]);
             return $foundFonts['bold'];
         }
         
@@ -711,32 +800,96 @@ class VideoRenderer
     }
 
     /**
+     * Escape special characters for FFmpeg drawtext filter text parameter.
+     * CRITICAL: Must escape commas, colons, quotes, and backslashes.
+     * 
+     * @param string $text The text to escape
+     * @return string Escaped text safe for FFmpeg drawtext
+     */
+    private function escapeDrawtext(string $text): string
+    {
+        // Escape in this order to avoid double-escaping:
+        // 1. Backslashes first (so they don't interfere with other escaping)
+        // 2. Single quotes (escape as \')
+        // 3. Double quotes (escape as \")
+        // 4. Colons (escape as \:) - they are parameter separators
+        // 5. Commas (escape as \,) - they are filter separators in filter_complex (CRITICAL!)
+        
+        $escaped = $text;
+        $escaped = str_replace('\\', '\\\\', $escaped);  // Escape backslashes first
+        $escaped = str_replace("'", "\\'", $escaped);     // Escape single quotes
+        $escaped = str_replace('"', '\\"', $escaped);     // Escape double quotes
+        $escaped = str_replace(':', '\\:', $escaped);      // Escape colons
+        $escaped = str_replace(',', '\\,', $escaped);      // Escape commas (CRITICAL!)
+        
+        return $escaped;
+    }
+
+    /**
      * Wrap text at a specified character width for FFmpeg drawtext.
      * Uses proper Unicode character counting for multilingual text.
+     * Properly handles word boundaries and long words.
      */
     private function wrapText(string $text, int $maxChars): string
     {
+        // Remove any existing pipe characters (from previous processing) and split by them first
+        $text = str_replace('|', ' ', $text);
+        $text = trim($text);
+        
         // Use mb_strlen for proper Unicode character counting
         if (mb_strlen($text, 'UTF-8') <= $maxChars) {
             return $text;
         }
 
-        $words = explode(' ', $text);
+        $words = preg_split('/\s+/', $text, -1, PREG_SPLIT_NO_EMPTY);
         $lines = [];
         $currentLine = '';
 
         foreach ($words as $word) {
-            $testLine = $currentLine ? $currentLine . ' ' . $word : $word;
-            if (mb_strlen($testLine, 'UTF-8') <= $maxChars) {
-                $currentLine = $testLine;
-            } else {
+            $wordLength = mb_strlen($word, 'UTF-8');
+            
+            // If a single word is longer than maxChars, we need to break it
+            if ($wordLength > $maxChars) {
+                // First, add current line if it has content
                 if ($currentLine) {
                     $lines[] = $currentLine;
+                    $currentLine = '';
                 }
-                $currentLine = $word;
+                
+                // Break the long word into chunks
+                $remainingWord = $word;
+                while (mb_strlen($remainingWord, 'UTF-8') > $maxChars) {
+                    // Try to break at a reasonable point (prefer breaking at 80% of max length)
+                    $breakPoint = intval($maxChars * 0.8);
+                    $chunk = mb_substr($remainingWord, 0, $breakPoint, 'UTF-8');
+                    $lines[] = $chunk;
+                    $remainingWord = mb_substr($remainingWord, $breakPoint, null, 'UTF-8');
+                }
+                
+                // Add remaining part of the word as current line
+                if ($remainingWord) {
+                    $currentLine = $remainingWord;
+                }
+            } else {
+                // Normal word that fits within limit
+                if (empty($currentLine)) {
+                    $currentLine = $word;
+                } else {
+                    $testLine = $currentLine . ' ' . $word;
+                    $testLength = mb_strlen($testLine, 'UTF-8');
+                    
+                    if ($testLength <= $maxChars) {
+                        $currentLine = $testLine;
+                    } else {
+                        // Current line is full, start a new line
+                        $lines[] = $currentLine;
+                        $currentLine = $word;
+                    }
+                }
             }
         }
 
+        // Add the last line if it has content
         if ($currentLine) {
             $lines[] = $currentLine;
         }

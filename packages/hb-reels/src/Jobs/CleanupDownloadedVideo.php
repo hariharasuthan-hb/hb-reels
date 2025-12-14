@@ -47,42 +47,12 @@ class CleanupDownloadedVideo implements ShouldQueue
 
                 // Delete the activity log record
                 $activityLog->delete();
-
-                Log::info('Activity log deleted after video download', [
-                    'activity_log_id' => $activityLogId,
-                    'user_id' => $userId,
-                    'job_id' => $this->job->getJobId()
-                ]);
-            } else {
-                Log::info('Activity log already deleted or not found', [
-                    'activity_log_id' => $activityLogId,
-                    'job_id' => $this->job->getJobId()
-                ]);
             }
 
             // Delete the video file if it still exists
             if (Storage::disk($disk)->exists($filePath)) {
                 Storage::disk($disk)->delete($filePath);
-
-                Log::info('Video file deleted after download', [
-                    'disk' => $disk,
-                    'file_path' => $filePath,
-                    'job_id' => $this->job->getJobId()
-                ]);
-            } else {
-                Log::info('Video file already deleted or not found', [
-                    'disk' => $disk,
-                    'file_path' => $filePath,
-                    'job_id' => $this->job->getJobId()
-                ]);
             }
-
-            Log::info('Video cleanup completed successfully', [
-                'activity_log_id' => $activityLogId,
-                'disk' => $disk,
-                'file_path' => $filePath,
-                'job_id' => $this->job->getJobId()
-            ]);
 
         } catch (\Exception $e) {
             Log::error('Failed to cleanup downloaded video', [

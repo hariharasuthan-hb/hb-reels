@@ -41,6 +41,12 @@ class Menu extends Model
             if ($this->route === 'member.dashboard' && !auth()->check()) {
                 return route('login');
             }
+            
+            // If user is admin and trying to access member dashboard, redirect to admin dashboard
+            if ($this->route === 'member.dashboard' && auth()->check() && auth()->user()->hasRole('admin')) {
+                return route('admin.dashboard');
+            }
+            
             return route($this->route);
         }
         

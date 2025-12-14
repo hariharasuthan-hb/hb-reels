@@ -450,7 +450,6 @@ class RazorpayAdapter
                 'paid_at' => now(),
             ]);
 
-            Log::info('Payment record created from Razorpay charge webhook', [
                 'subscription_id' => $subscription->id,
                 'transaction_id' => $transactionId,
                 'amount' => $amount,
