@@ -183,7 +183,36 @@ class ReelController
         }
 
         $request->validate([
-            'flyer_image' => 'nullable|image|mimes:jpeg,jpg,png|max:10240',
+            'flyer_image' => [
+                'nullable',
+                'image',
+                'mimes:jpeg,jpg,png',
+                'max:10240',
+                function ($attribute, $value, $fail) {
+                    if ($value) {
+                        // Get image dimensions
+                        $imageInfo = getimagesize($value->getRealPath());
+                        if ($imageInfo) {
+                            $width = $imageInfo[0];
+                            $height = $imageInfo[1];
+                            
+                            // Minimum dimensions for flyer (to ensure caption fits properly)
+                            $minWidth = 600;  // Minimum 600px width
+                            $minHeight = 800; // Minimum 800px height (portrait orientation)
+                            
+                            if ($width < $minWidth || $height < $minHeight) {
+                                $fail("The flyer image must be at least {$minWidth}x{$minHeight} pixels. Your image is {$width}x{$height} pixels.");
+                            }
+                            
+                            // Check aspect ratio - prefer portrait orientation (height > width)
+                            $aspectRatio = $height / $width;
+                            if ($aspectRatio < 1.2) {
+                                $fail("The flyer image should be in portrait orientation (height should be at least 1.2x the width) for best results.");
+                            }
+                        }
+                    }
+                },
+            ],
             'event_text' => 'nullable|string|max:2000',
             'show_flyer' => 'nullable|boolean',
             'access_code' => 'nullable|string',

@@ -139,6 +139,7 @@
                                 <p class="pl-1">or drag and drop</p>
                             </div>
                             <p class="text-xs text-gray-500">PNG, JPG up to 10MB</p>
+                            <p class="text-xs text-gray-500 mt-1">Minimum size: 600x800px (portrait orientation recommended)</p>
                             <p id="file-name" class="text-sm text-gray-600 mt-2 hidden"></p>
                         </div>
                     </div>

@@ -42,6 +42,23 @@ class VideoRenderer
             mkdir($outputDir, 0755, true);
         }
 
+        // Resolve flyer path and verify it exists
+        $flyerFullPath = null;
+        if ($flyerPath) {
+            $flyerFullPath = strpos($flyerPath, $diskRoot) === 0 
+                ? $flyerPath 
+                : Storage::disk($disk)->path($flyerPath);
+            
+            // Verify flyer file exists before using it
+            if (!file_exists($flyerFullPath)) {
+                \Log::warning('Flyer file not found, skipping flyer overlay', [
+                    'flyer_path' => $flyerPath,
+                    'full_path' => $flyerFullPath
+                ]);
+                $flyerFullPath = null; // Skip flyer if file doesn't exist
+            }
+        }
+
         // Build FFmpeg command
         $command = $this->buildFFmpegCommand(
             $ffmpegPath,
@@ -51,11 +68,17 @@ class VideoRenderer
             $height,
             $duration,
             $fps,
-            $flyerPath ? (strpos($flyerPath, $diskRoot) === 0 ? $flyerPath : Storage::disk($disk)->path($flyerPath)) : null,
+            $flyerFullPath, // Pass resolved flyer path (or null if doesn't exist)
             $caption,
             $language
         );
 
+        // DEBUG: Log the actual FFmpeg command being executed (for troubleshooting)
+        \Log::warning('FFMPEG COMMAND DEBUG', [
+            'command' => $command,
+            'command_length' => strlen($command)
+        ]);
+        
         // Execute FFmpeg
         exec($command . ' 2>&1', $output, $returnCode);
 
@@ -101,8 +124,11 @@ class VideoRenderer
         // Input 1: Stock video
         $inputs[] = sprintf('-i %s', escapeshellarg($stockVideoPath));
     
-        // Input 2: Flyer (if provided)
-        if ($flyerPath) {
+        // Track whether flyer was actually added to filter chain
+        $flyerAdded = false;
+        
+        // Input 2: Flyer (if provided and file exists)
+        if ($flyerPath && file_exists($flyerPath)) {
             $inputs[] = sprintf('-i %s', escapeshellarg($flyerPath));
             
             // Scale and overlay flyer
@@ -118,6 +144,7 @@ class VideoRenderer
                 intval($width * 0.8)
             );
             $filters[] = '[v0][flyer]overlay=(W-w)/2:(H-h)/2[v]';
+            $flyerAdded = true;
         } else {
             // Just scale stock video
             $filters[] = sprintf(
@@ -146,11 +173,11 @@ class VideoRenderer
 
             // Calculate available width for text
             // If flyer exists, text should fit within flyer area accounting for border/padding
-            // Flyer is 80% of video width, but we need to account for border (typically 2-5% on each side)
-            // So text should use ~70% of video width to stay well within flyer border
+            // Flyer is 80% of video width, but we need to account for border (typically 5-10% on each side)
+            // So text should use ~60% of video width to stay well within flyer border
             // If no flyer, use full width minus side margins (10% on each side = 80% usable)
-            $availableWidth = $flyerPath 
-                ? intval($width * 0.70)  // Flyer is 80% width, text uses 70% to stay well within flyer border (5% margin on each side)
+            $availableWidth = $flyerAdded 
+                ? intval($width * 0.60)  // Flyer is 80% width, text uses 60% to stay well within flyer border (10% margin on each side)
                 : intval($width * 0.85);  // No flyer: use 85% of width (7.5% margin on each side)
             
             // Estimate characters per line based on available width and font size
@@ -275,23 +302,23 @@ class VideoRenderer
             // Calculate Y position for text
             // If flyer exists, position text within flyer area accounting for border
             // If no flyer, position in lower third of video (standard caption position)
-            if ($flyerPath) {
+            if ($flyerAdded) {
                 // Flyer is centered, so calculate text position within flyer bounds
                 // Flyer height is approximately 80% of video height when scaled
                 $flyerHeight = intval($height * 0.8);
                 $flyerTop = intval(($height - $flyerHeight) / 2);
                 $flyerBottom = $flyerTop + $flyerHeight;
                 
-                // Account for flyer border/padding (typically 3-5% of flyer dimensions)
+                // Account for flyer border/padding (typically 8-10% of flyer dimensions)
                 // This ensures text stays well inside the flyer border
-                $flyerBorderPadding = intval($flyerHeight * 0.05); // 5% border/padding for safety
+                $flyerBorderPadding = intval($flyerHeight * 0.10); // 10% border/padding for safety
                 $flyerInnerTop = $flyerTop + $flyerBorderPadding;
                 $flyerInnerBottom = $flyerBottom - $flyerBorderPadding;
                 $flyerInnerHeight = $flyerInnerBottom - $flyerInnerTop;
                 
                 // Calculate available height for text (with margins)
-                $textTopMargin = 40; // Margin from top of inner flyer area
-                $textBottomMargin = 40; // Margin from bottom of inner flyer area
+                $textTopMargin = 50; // Margin from top of inner flyer area
+                $textBottomMargin = 50; // Margin from bottom of inner flyer area
                 $maxAvailableHeight = $flyerInnerHeight - $textTopMargin - $textBottomMargin;
                 
                 // Check if text fits, if not, adjust font size and spacing
@@ -308,13 +335,17 @@ class VideoRenderer
                     $totalTextHeight = $initialTotalHeight;
                 }
                 
-                // Position text in lower portion of flyer inner area (bottom 45% of inner flyer area)
-                // This ensures text stays well within the flyer border
-                $textAreaTop = $flyerInnerTop + intval($flyerInnerHeight * 0.55);
-                $textAreaHeight = intval($flyerInnerHeight * 0.45);
+                // Position text at the TOP of flyer inner area
+                // Start from the very top of inner flyer area (no extra margin)
+                $textAreaTop = $flyerInnerTop; // Start from top of inner flyer area
+                $textAreaHeight = intval($flyerInnerHeight * 0.50); // Use top 50% of inner area
                 
-                // Center text vertically within the text area
-                $yStart = $textAreaTop + intval(($textAreaHeight - $totalTextHeight) / 2);
+                // Position text at the top of the text area (not centered)
+                // Add small margin from top for readability
+                $yStart = $textAreaTop + 30; // Small 30px margin from very top
+                
+                // Ensure Y position is aligned to avoid sub-pixel rendering issues
+                $yStart = intval($yStart);
                 
                 // Ensure text doesn't go below flyer inner area (respecting border)
                 $maxY = $flyerInnerBottom - $textBottomMargin;
@@ -323,7 +354,7 @@ class VideoRenderer
                 }
                 
                 // Ensure text doesn't go above flyer inner area
-                $minY = $flyerInnerTop + $textTopMargin;
+                $minY = $flyerInnerTop + 30; // Small margin from top
                 if ($yStart < $minY) {
                     $yStart = $minY;
                 }
@@ -331,8 +362,8 @@ class VideoRenderer
                 // Final validation: ensure all text fits within flyer inner bounds
                 if (($yStart + $totalTextHeight) > $flyerInnerBottom - $textBottomMargin) {
                     // Last resort: position at top of text area
-                    $yStart = $flyerInnerTop + $textTopMargin;
-                    $totalTextHeight = min($totalTextHeight, $flyerInnerHeight - $textTopMargin - $textBottomMargin);
+                    $yStart = $flyerInnerTop + 30; // Small margin from top
+                    $totalTextHeight = min($totalTextHeight, $flyerInnerHeight - 30 - $textBottomMargin);
                 }
             } else {
                 // No flyer: center text vertically on screen
@@ -346,12 +377,14 @@ class VideoRenderer
                     $heightRatio = $maxHeight / ($lineCount * 100); // Original yStep was ~100
                     $fontSize = max(32, intval($fontSize * $heightRatio));
                 }
-                // Center text vertically on screen
+                // Center text vertically on screen with proper alignment
                 $yStart = intval(($height - $totalTextHeight) / 2);
                 // Ensure minimum margin from top
                 if ($yStart < 100) {
                     $yStart = 100;
                 }
+                // Ensure Y position is properly aligned (no sub-pixel rendering)
+                $yStart = intval($yStart);
             }
 
             // QUICKTIME COMPATIBILITY FIX: Use drawtext instead of ASS subtitles
@@ -367,70 +400,76 @@ class VideoRenderer
             $totalNonEmptyLines = count($nonEmptyLines);
 
             $processedLineIndex = 0;
-            $lastTextLabel = '[v]'; // Initialize - will be updated in loop
+            $lastTextLabel = '[v]'; // Initialize - will be updated in loop if captions exist
             
             // Only process if we have non-empty lines
             if ($totalNonEmptyLines > 0) {
                 // Process only non-empty lines
                 foreach ($nonEmptyLines as $line) {
-                // Escape special characters for FFmpeg drawtext filter text parameter
-                // CRITICAL: Must escape commas, colons, quotes, and backslashes
-                // We use SINGLE QUOTES for text parameter to avoid quote escaping issues
-                $safe = $this->escapeDrawtext($line);
-                
-                // Handle newlines - convert to space (FFmpeg drawtext doesn't support newlines in text parameter)
-                $safe = str_replace(["\r\n", "\r", "\n"], ' ', $safe);
-                
-                // Remove any control characters that might cause issues
-                $safe = preg_replace('/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/', '', $safe);
-                
-                // Clean up multiple spaces
-                $safe = preg_replace('/\s+/', ' ', trim($safe));
+                    // Escape special characters for FFmpeg drawtext filter text parameter
+                    // CRITICAL: Must escape commas, colons, quotes, and backslashes
+                    // We use SINGLE QUOTES for text parameter to avoid quote escaping issues
+                    $safe = $this->escapeDrawtext($line);
+                    
+                    // Handle newlines - convert to space (FFmpeg drawtext doesn't support newlines in text parameter)
+                    $safe = str_replace(["\r\n", "\r", "\n"], ' ', $safe);
+                    
+                    // Remove any control characters that might cause issues
+                    $safe = preg_replace('/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/', '', $safe);
+                    
+                    // Clean up multiple spaces
+                    $safe = preg_replace('/\s+/', ' ', trim($safe));
 
-                // Wrap long text manually (FFmpeg doesn't have auto text wrapping)
-                // Use higher limit for Unicode text (Tamil, etc.) since characters take more bytes
-                $wrapLimit = in_array($language, ['ta', 'hi', 'te', 'ml', 'kn', 'bn', 'gu', 'pa', 'or', 'mr', 'th', 'my', 'km', 'lo', 'zh', 'ja', 'ko', 'ar', 'fa', 'ur'])
-                    ? 25 // Lower limit for complex scripts
-                    : 35; // Standard limit for Latin scripts
-                $safe = $this->wrapText($safe, $wrapLimit);
+                    // Wrap long text manually (FFmpeg doesn't have auto text wrapping)
+                    // Use higher limit for Unicode text (Tamil, etc.) since characters take more bytes
+                    $wrapLimit = in_array($language, ['ta', 'hi', 'te', 'ml', 'kn', 'bn', 'gu', 'pa', 'or', 'mr', 'th', 'my', 'km', 'lo', 'zh', 'ja', 'ko', 'ar', 'fa', 'ur'])
+                        ? 25 // Lower limit for complex scripts
+                        : 35; // Standard limit for Latin scripts
+                    $safe = $this->wrapText($safe, $wrapLimit);
 
-                // Create unique stream labels for each line to chain them properly
-                // IMPORTANT: Don't reuse [v] label - use unique labels for all filters
-                $inputLabel = $processedLineIndex === 0 ? '[v]' : "[v{$processedLineIndex}]";
-                $isLastLine = $processedLineIndex === $totalNonEmptyLines - 1;
-                // Use a unique label for the last drawtext output, not [v]
-                $outputLabel = $isLastLine ? "[vtext{$processedLineIndex}]" : "[v" . ($processedLineIndex + 1) . "]";
-                
-                // Track the last output label for use in trim filter
-                $lastTextLabel = $outputLabel;
+                    // Create unique stream labels for each line to chain them properly
+                    // CRITICAL: Never use [vout] as output - only trim filter can output [vout]
+                    // IMPORTANT: Don't reuse [v] label - use unique labels for all filters
+                    $inputLabel = $processedLineIndex === 0 ? '[v]' : "[v{$processedLineIndex}]";
+                    $isLastLine = $processedLineIndex === $totalNonEmptyLines - 1;
+                    // Use a unique intermediate label for output - NEVER use [vout] here
+                    // All drawtext filters output intermediate labels, only trim outputs [vout]
+                    $outputLabel = $isLastLine ? "[vtext{$processedLineIndex}]" : "[v" . ($processedLineIndex + 1) . "]";
+                    
+                    // Track the last output label for use in trim filter
+                    $lastTextLabel = $outputLabel;
 
-                // Draw text centered on screen - NO background, NO box, NO shadow, NO border
-                // Use SINGLE QUOTES for text parameter - this is the safest approach
-                // Text is already escaped by escapeDrawtext() function
-                // Text is centered horizontally and vertically on screen
-                if ($fontFile && file_exists($fontFile)) {
-                    $filters[] = sprintf(
-                        "%sdrawtext=fontfile='%s':text='%s':fontsize=%d:fontcolor=white:" .
-                        "x=(w-text_w)/2:y=%d%s",
-                        $inputLabel,
-                        $fontFile, // Font file path in single quotes
-                        $safe,      // Text in single quotes (already escaped)
-                        $fontSize,
-                        $currentY,
-                        $outputLabel
-                    );
-                } else {
-                    // Fallback to system font
-                    $filters[] = sprintf(
-                        "%sdrawtext=font='Arial':text='%s':fontsize=%d:fontcolor=white:" .
-                        "x=(w-text_w)/2:y=%d%s",
-                        $inputLabel,
-                        $safe,      // Text in single quotes (already escaped)
-                        $fontSize,
-                        $currentY,
-                        $outputLabel
-                    );
-                }
+                    // Draw text centered on screen with light gray semi-transparent background box
+                    // Use SINGLE QUOTES for text parameter - this is the safest approach
+                    // Text is already escaped by escapeDrawtext() function
+                    // Text is perfectly centered horizontally using (w-text_w)/2
+                    // Light gray overlay (box) for better readability
+                    // Ensure Y position is properly aligned (no sub-pixel rendering)
+                    $alignedY = intval($currentY);
+                    
+                    if ($fontFile && file_exists($fontFile)) {
+                        $filters[] = sprintf(
+                            "%sdrawtext=fontfile='%s':text='%s':fontsize=%d:fontcolor=white:" .
+                            "x=(w-text_w)/2:y=%d:box=1:boxcolor=0xD0D0D0@0.5:boxborderw=10%s",
+                            $inputLabel,
+                            $fontFile, // Font file path in single quotes
+                            $safe,      // Text in single quotes (already escaped)
+                            $fontSize,
+                            $alignedY,  // Use aligned Y position
+                            $outputLabel
+                        );
+                    } else {
+                        // Fallback to system font
+                        $filters[] = sprintf(
+                            "%sdrawtext=font='Arial':text='%s':fontsize=%d:fontcolor=white:" .
+                            "x=(w-text_w)/2:y=%d:box=1:boxcolor=0xD0D0D0@0.5:boxborderw=10%s",
+                            $inputLabel,
+                            $safe,      // Text in single quotes (already escaped)
+                            $fontSize,
+                            $alignedY,  // Use aligned Y position
+                            $outputLabel
+                        );
+                    }
 
                     $currentY += $yStep;
                     $processedLineIndex++;
@@ -438,22 +477,92 @@ class VideoRenderer
             }
             // If no caption or all lines were empty, $lastTextLabel remains '[v]'
         } else {
+            // No caption provided - use [v] from video/flyer processing
             $lastTextLabel = '[v]';
         }
+        
+        // Ensure lastTextLabel is always set before using it
+        if (empty($lastTextLabel)) {
+            $lastTextLabel = '[v]';
+        }
+        
+        // CRITICAL: Verify that lastTextLabel exists in the filter chain before using it
+        // Build a temporary filter complex to check if the label exists as an output
+        $tempFilterComplex = implode(';', $filters);
+        $labelPattern = preg_quote($lastTextLabel, '/');
+        
+        // Check if lastTextLabel appears as an output (ends with [label])
+        // Pattern: ...something[label]; or ...something[label] at end
+        $labelExists = preg_match('/' . $labelPattern . '(;|$)/', $tempFilterComplex);
+        
+        // If label doesn't exist, fall back to [v] which is always created
+        if (!$labelExists) {
+            \Log::warning('lastTextLabel not found in filter chain, falling back to [v]', [
+                'last_text_label' => $lastTextLabel,
+                'filter_complex' => $tempFilterComplex,
+                'filters' => $filters
+            ]);
+            $lastTextLabel = '[v]';
+        }
+        
+        // CRITICAL: Only the trim filter can output [vout]
+        // [vout] must appear ONLY ONCE and ONLY as the final output
+        // Never use [vout] as input - it's the final destination
+        // Format: [input_label]trim=duration=X,setpts=PTS-STARTPTS,fps=Y[vout]
         $filters[] = $lastTextLabel . 'trim=duration=' . $duration . ',setpts=PTS-STARTPTS,fps=' . $fps . '[vout]';
     
+        // CRITICAL: Ensure we have at least one filter (video scaling)
+        if (empty($filters)) {
+            throw new \Exception('No filters generated - filter chain is empty');
+        }
+        
         $filterComplex = implode(';', $filters);
+        
+        // DEBUG: Verify [vout] appears only once and is the final output
+        $voutCount = substr_count($filterComplex, '[vout]');
+        if ($voutCount !== 1) {
+            \Log::error('FFMPEG FILTER GRAPH ERROR: [vout] appears ' . $voutCount . ' times (must be exactly 1)', [
+                'filter_complex' => $filterComplex,
+                'last_text_label' => $lastTextLabel,
+                'vout_positions' => strpos($filterComplex, '[vout]'),
+                'filters' => $filters
+            ]);
+            throw new \Exception('Invalid filter graph: [vout] must appear exactly once. Found: ' . $voutCount);
+        }
+        
+        // Verify lastTextLabel exists in filter chain
+        if (!empty($lastTextLabel) && strpos($filterComplex, $lastTextLabel) === false) {
+            \Log::error('FFMPEG FILTER GRAPH ERROR: lastTextLabel not found in filter chain', [
+                'last_text_label' => $lastTextLabel,
+                'filter_complex' => $filterComplex,
+                'filters' => $filters
+            ]);
+            throw new \Exception('Invalid filter graph: lastTextLabel "' . $lastTextLabel . '" not found in filter chain');
+        }
+        
+        // DEBUG: Log filter graph for troubleshooting (use warning level so it's always logged)
+        \Log::warning('FFMPEG FILTER GRAPH DEBUG', [
+            'filter_complex' => $filterComplex,
+            'last_text_label' => $lastTextLabel,
+            'vout_count' => $voutCount,
+            'has_flyer' => $flyerAdded,
+            'has_caption' => !empty($caption),
+            'filter_count' => count($filters),
+            'filters_array' => $filters
+        ]);
     
         // Escape the filter_complex for shell execution
-        // CRITICAL: escapeshellarg() wraps in single quotes and escapes internal single quotes as '\''
-        // This is correct for shell safety, but FFmpeg can still parse it correctly
-        // The filter_complex string will be: '[0:v]...text='\''escaped text'\''...'
-        // FFmpeg sees: [0:v]...text='escaped text'... (the '\'' becomes just ' in the actual filter)
+        // CRITICAL FIX: escapeshellarg() can break FFmpeg filter_complex parsing
+        // Instead, manually escape single quotes for shell safety while preserving FFmpeg syntax
+        // Wrap in single quotes and escape internal single quotes as '\''
+        $escapedFilterComplex = str_replace("'", "'\\''", $filterComplex);
+        $escapedFilterComplex = "'" . $escapedFilterComplex . "'";
+        
         $command = sprintf(
             '%s %s -filter_complex %s -map "[vout]" -t %d -c:v libx264 -preset fast -crf 23 -pix_fmt yuv420p -movflags +faststart %s',
             escapeshellarg($ffmpegPath),
             implode(' ', $inputs),
-            escapeshellarg($filterComplex),
+            $escapedFilterComplex, // Use manually escaped version
             $duration,
             escapeshellarg($outputPath)
         );
@@ -805,6 +914,14 @@ class VideoRenderer
      * 
      * @param string $text The text to escape
      * @return string Escaped text safe for FFmpeg drawtext
+     */
+    /**
+     * Escape special characters for FFmpeg drawtext filter.
+     * CRITICAL: Must escape commas, colons, single quotes, double quotes, and backslashes.
+     * We use SINGLE QUOTES for text parameter, so single quotes must be escaped as \'
+     * 
+     * @param string $text Text to escape
+     * @return string Escaped text safe for FFmpeg drawtext filter
      */
     private function escapeDrawtext(string $text): string
     {
