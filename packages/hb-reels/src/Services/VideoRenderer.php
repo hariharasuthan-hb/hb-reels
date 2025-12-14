@@ -173,11 +173,11 @@ class VideoRenderer
 
             // Calculate available width for text
             // If flyer exists, text should fit within flyer area accounting for border/padding
-            // Flyer is 80% of video width, but we need to account for border (typically 5-10% on each side)
-            // So text should use ~60% of video width to stay well within flyer border
+            // Flyer is 80% of video width, but we need to account for border (typically 15-20% on each side)
+            // So text should use ~50% of video width to stay well within flyer border
             // If no flyer, use full width minus side margins (10% on each side = 80% usable)
             $availableWidth = $flyerAdded 
-                ? intval($width * 0.60)  // Flyer is 80% width, text uses 60% to stay well within flyer border (10% margin on each side)
+                ? intval($width * 0.50)  // Flyer is 80% width, text uses 50% to stay well inside flyer border (15% margin on each side)
                 : intval($width * 0.85);  // No flyer: use 85% of width (7.5% margin on each side)
             
             // Estimate characters per line based on available width and font size
@@ -309,16 +309,20 @@ class VideoRenderer
                 $flyerTop = intval(($height - $flyerHeight) / 2);
                 $flyerBottom = $flyerTop + $flyerHeight;
                 
-                // Account for flyer border/padding (typically 8-10% of flyer dimensions)
+                // Account for flyer border/padding (typically 15-20% of flyer dimensions)
                 // This ensures text stays well inside the flyer border
-                $flyerBorderPadding = intval($flyerHeight * 0.10); // 10% border/padding for safety
+                $flyerBorderPadding = intval($flyerHeight * 0.15); // 15% border/padding to ensure text stays inside border
                 $flyerInnerTop = $flyerTop + $flyerBorderPadding;
                 $flyerInnerBottom = $flyerBottom - $flyerBorderPadding;
                 $flyerInnerHeight = $flyerInnerBottom - $flyerInnerTop;
                 
+                // Also account for horizontal border (width-wise)
+                $flyerWidth = intval($width * 0.8); // Flyer is 80% of video width
+                $flyerBorderPaddingHorizontal = intval($flyerWidth * 0.15); // 15% border on each side
+                
                 // Calculate available height for text (with margins)
-                $textTopMargin = 50; // Margin from top of inner flyer area
-                $textBottomMargin = 50; // Margin from bottom of inner flyer area
+                $textTopMargin = 100; // Margin from top of inner flyer area
+                $textBottomMargin = 10; // Margin from bottom of inner flyer area
                 $maxAvailableHeight = $flyerInnerHeight - $textTopMargin - $textBottomMargin;
                 
                 // Check if text fits, if not, adjust font size and spacing
@@ -335,35 +339,53 @@ class VideoRenderer
                     $totalTextHeight = $initialTotalHeight;
                 }
                 
-                // Position text at the TOP of flyer inner area
-                // Start from the very top of inner flyer area (no extra margin)
+                // Position text in the flyer inner area (moved down more)
+                // Start from the very top of inner flyer area
                 $textAreaTop = $flyerInnerTop; // Start from top of inner flyer area
                 $textAreaHeight = intval($flyerInnerHeight * 0.50); // Use top 50% of inner area
                 
-                // Position text at the top of the text area (not centered)
-                // Add small margin from top for readability
-                $yStart = $textAreaTop + 30; // Small 30px margin from very top
+                // Position text further down from top
+                $yStart = $textAreaTop + 80; // 80px margin from very top (moved down more)
                 
                 // Ensure Y position is aligned to avoid sub-pixel rendering issues
                 $yStart = intval($yStart);
                 
-                // Ensure text doesn't go below flyer inner area (respecting border)
-                $maxY = $flyerInnerBottom - $textBottomMargin;
+                // CRITICAL: Ensure text stays well inside flyer border boundaries
+                // Calculate strict boundaries with additional safety margin
+                $safetyMargin = 20; // Extra safety margin to ensure text never touches border
+                $strictInnerTop = $flyerInnerTop + $safetyMargin;
+                $strictInnerBottom = $flyerInnerBottom - $safetyMargin;
+                
+                // Ensure text doesn't go below flyer inner area (respecting border with safety margin)
+                $maxY = $strictInnerBottom - $textBottomMargin;
                 if (($yStart + $totalTextHeight) > $maxY) {
-                    $yStart = $maxY - $totalTextHeight;
+                    $yStart = max($strictInnerTop, $maxY - $totalTextHeight);
                 }
                 
-                // Ensure text doesn't go above flyer inner area
-                $minY = $flyerInnerTop + 30; // Small margin from top
+                // Ensure text doesn't go above flyer inner area (with safety margin)
+                $minY = $strictInnerTop + 80; // Margin from top
                 if ($yStart < $minY) {
                     $yStart = $minY;
                 }
                 
-                // Final validation: ensure all text fits within flyer inner bounds
-                if (($yStart + $totalTextHeight) > $flyerInnerBottom - $textBottomMargin) {
-                    // Last resort: position at top of text area
-                    $yStart = $flyerInnerTop + 30; // Small margin from top
-                    $totalTextHeight = min($totalTextHeight, $flyerInnerHeight - 30 - $textBottomMargin);
+                // Final validation: ensure all text fits within strict flyer inner bounds
+                if (($yStart + $totalTextHeight) > $strictInnerBottom - $textBottomMargin) {
+                    // Last resort: reduce font size and spacing to fit within border
+                    $availableHeight = $strictInnerBottom - $strictInnerTop - 80 - $textBottomMargin;
+                    if ($lineCount > 0 && $availableHeight > 0) {
+                        $yStep = intval($availableHeight / $lineCount);
+                        $totalTextHeight = ($lineCount * $yStep);
+                        $heightRatio = $availableHeight / max($initialTotalHeight, 1);
+                        $fontSize = max(28, intval($fontSize * $heightRatio)); // Minimum 28px
+                        $yStart = $strictInnerTop + 80;
+                    }
+                }
+                
+                // Double-check: text must never exceed strict boundaries
+                if ($yStart < $strictInnerTop || ($yStart + $totalTextHeight) > $strictInnerBottom) {
+                    // Emergency fallback: center within strict boundaries
+                    $yStart = $strictInnerTop + intval(($strictInnerBottom - $strictInnerTop - $totalTextHeight) / 2);
+                    $yStart = max($strictInnerTop, min($yStart, $strictInnerBottom - $totalTextHeight));
                 }
             } else {
                 // No flyer: center text vertically on screen
