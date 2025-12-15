@@ -17,7 +17,8 @@ class AIService
     public function __construct(?ClientInterface $client = null)
     {
         $this->client = $client ?? new Client([
-            'timeout' => 30,
+            'timeout' => 120,
+            'connect_timeout' => 10,
         ]);
         
         // Enable Google Translate for better accuracy in non-English languages
@@ -122,8 +123,12 @@ JSON:";
                     'model' => $model,
                     'prompt' => $prompt,
                     'stream' => false,
-                    'temperature' => 0.7, // Balanced creativity and consistency
+                    'options' => [
+                        'num_predict' => 80,   // captions don't need more
+                        'temperature' => 0.4,
+                    ],
                 ],
+                'timeout' => 120,
             ]);
 
             $data = json_decode($response->getBody()->getContents(), true);
@@ -233,8 +238,12 @@ JSON:";
                     'model' => $model,
                     'prompt' => $prompt,
                     'stream' => false,
-                    'temperature' => 0.3, // Lower temperature for more consistent extraction
+                    'options' => [
+                        'num_predict' => 80,   // limit output size
+                        'temperature' => 0.4,
+                    ],
                 ],
+                'timeout' => 120,
             ]);
 
             $data = json_decode($response->getBody()->getContents(), true);
