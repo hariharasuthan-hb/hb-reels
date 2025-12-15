@@ -18,7 +18,7 @@
             @endif
         </header>
 
-        <div class="prose prose-lg max-w-none">
+        <div class="app-container prose prose-lg max-w-none">
             {!! render_content($page->content) !!}
         </div>
 

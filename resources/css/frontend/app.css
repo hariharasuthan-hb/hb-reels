@@ -19,3 +19,143 @@ section {
     scroll-margin-top: 80px;
 }
 
+/* CMS Section Dynamic Pages Styles */
+.app-container {
+  max-width: 900px;
+  margin: 40px auto;
+  background: #ffffff;
+  padding: 30px 40px;
+  border-radius: 12px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.08);
+}
+
+.app-container h1 {
+  font-size: 30px;
+  color: #1e293b;
+  text-align: center;
+  margin-bottom: 30px;
+}
+
+.app-container section {
+  margin-bottom: 28px;
+}
+
+.app-container section h2 {
+  font-size: 22px;
+  color: #0f766e;
+  border-left: 4px solid #0f766e;
+  padding-left: 12px;
+  margin-bottom: 12px;
+}
+
+.app-container section h3 {
+  font-size: 18px;
+  color: #1e40af;
+  margin-top: 15px;
+}
+
+.app-container p {
+  font-size: 16px;
+  color: #475569;
+}
+
+.app-container ul {
+  margin-top: 10px;
+  padding-left: 20px;
+}
+
+.app-container ul li {
+  margin-bottom: 8px;
+  font-size: 15px;
+  color: #374151;
+}
+
+.app-container ul li::marker {
+  color: #0f766e;
+}
+
+@media (max-width: 768px) {
+  .app-container {
+    padding: 20px;
+  }
+
+  .app-container h1 {
+    font-size: 24px;
+  }
+}
+
+/* Beautiful Header Styles for CMS Pages */
+article header {
+  position: relative;
+  padding: 40px 0;
+  margin-bottom: 40px;
+  border-bottom: 3px solid transparent;
+  background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%);
+  border-radius: 12px;
+  padding: 40px 30px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+}
+
+article header::before {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 80px;
+  height: 4px;
+  background: linear-gradient(90deg, #0f766e 0%, #14b8a6 50%, #0f766e 100%);
+  border-radius: 2px;
+}
+
+article header h1 {
+  font-size: 2.75rem;
+  font-weight: 700;
+  background: linear-gradient(135deg, #1e293b 0%, #0f766e 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-bottom: 16px;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  text-align: center;
+  position: relative;
+}
+
+article header h1::after {
+  content: '';
+  position: absolute;
+  bottom: -8px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 60px;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, #14b8a6, transparent);
+  border-radius: 2px;
+}
+
+article header p {
+  font-size: 1.25rem;
+  color: #64748b;
+  text-align: center;
+  font-weight: 400;
+  line-height: 1.6;
+  margin-top: 12px;
+  font-style: italic;
+}
+
+@media (max-width: 768px) {
+  article header {
+    padding: 30px 20px;
+    margin-bottom: 30px;
+  }
+
+  article header h1 {
+    font-size: 2rem;
+  }
+
+  article header p {
+    font-size: 1.1rem;
+  }
+}
+

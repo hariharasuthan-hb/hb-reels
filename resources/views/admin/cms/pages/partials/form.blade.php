@@ -117,10 +117,7 @@
 
         {{-- Content --}}
         <div>
-            <label for="content" class="block text-sm font-medium text-gray-700 mb-2">
-                Content
-            </label>
-            @include('admin.components.rich-text-editor', [
+            @include('admin.components.rich-text-editor', [ 
                 'name' => 'content',
                 'label' => 'Content',
                 'value' => old('content', $page->content ?? ''),
@@ -189,6 +186,7 @@
         {{ $submitLabel }}
     </button>
 </div>
+
 
 
 

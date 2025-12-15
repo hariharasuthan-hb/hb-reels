@@ -43,7 +43,7 @@ class GrammarService
     public function __construct()
     {
         $this->client = new Client([
-            'timeout' => 60, // Increased timeout for AI responses
+            'timeout' => 120, // Increased timeout for AI responses
             'connect_timeout' => 10
         ]);
         
@@ -112,11 +112,11 @@ class GrammarService
                     'prompt' => $prompt,
                     'stream' => false,
                     'options' => [
-                        'temperature' => 0.1, // Low temperature for consistent corrections
-                        'num_predict' => 200
+                        'num_predict' => 100,   // limit output size for grammar corrections
+                        'temperature' => 0.4,
                     ]
                 ],
-                'timeout' => 60
+                'timeout' => 120
             ]);
             
             $result = json_decode($response->getBody(), true);
