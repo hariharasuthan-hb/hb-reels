@@ -159,3 +159,25 @@ article header p {
   }
 }
 
+/* Center Alignment for Services Section on Home Page */
+section#services {
+  text-align: center;
+}
+
+section#services .grid > div {
+  text-align: center;
+}
+
+section#services .grid > div h3 {
+  text-align: center;
+}
+
+section#services .grid > div p {
+  text-align: center;
+}
+
+section#services .grid > div a {
+  display: inline-block;
+  text-align: center;
+}
+
