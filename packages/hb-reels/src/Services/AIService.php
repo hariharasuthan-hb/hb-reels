@@ -65,9 +65,12 @@ class AIService
         $prompt = "You are a professional video content creator. Transform the provided text into engaging video content.
 
 CONTENT ANALYSIS:
-1. Identify the event/occasion type (birthday, wedding, corporate, product launch, celebration, etc.)
-2. Determine the emotional tone (joyful, professional, romantic, energetic, elegant, etc.)
-3. Extract key visual and thematic elements (colors, lighting, setting, activities, atmosphere)
+1. Identify the BUSINESS/BRANDING TYPE (jewelry, electrical, fashion, restaurant, electronics, automotive, furniture, medical, education, etc.)
+   - CRITICAL: Detect what type of shop/business this is from the text
+   - Examples: jewelry shop → jewelry, electrical store → electrical, restaurant → food/restaurant
+2. Identify the event/occasion type (birthday, wedding, corporate, product launch, celebration, sale, promotion, etc.)
+3. Determine the emotional tone (joyful, professional, romantic, energetic, elegant, etc.)
+4. Extract key visual and thematic elements (colors, lighting, setting, activities, atmosphere)
 
 CAPTION CREATION - CRITICAL REQUIREMENTS:
 - Create a BRAND NEW, creative, and engaging caption
@@ -83,11 +86,18 @@ CAPTION CREATION - CRITICAL REQUIREMENTS:
 - Focus on the celebration, emotion, and key message
 - For announcements with contact info, prices, or details: preserve ALL information completely
 
-VIDEO SEARCH OPTIMIZATION:
-- Provide 3-5 specific visual keywords for perfect stock footage matching
-- Focus on: lighting style, colors, activities, settings, atmosphere, mood
-- Use descriptive terms video search engines understand (e.g., 'bright celebration', 'elegant lighting', 'outdoor gathering')
-- Prioritize visual and atmospheric keywords
+VIDEO SEARCH OPTIMIZATION - CRITICAL FOR BUSINESS RELEVANCE:
+- FIRST: Identify the BUSINESS TYPE from the text (jewelry, electrical, fashion, restaurant, etc.)
+- Generate video keywords SPECIFIC to that business type:
+  * Jewelry shop → 'jewelry store', 'diamond showcase', 'gold jewelry', 'jewelry display', 'luxury jewelry'
+  * Electrical shop → 'electrical store', 'electronics shop', 'electrical appliances', 'wiring', 'electrical tools'
+  * Fashion store → 'fashion boutique', 'clothing store', 'fashion display', 'apparel shop'
+  * Restaurant → 'restaurant interior', 'food service', 'dining', 'culinary', 'restaurant ambiance'
+  * And so on for other business types
+- Then add: lighting style, colors, activities, settings, atmosphere, mood
+- ALWAYS prioritize business-specific keywords FIRST, then add visual/atmospheric keywords
+- Use descriptive terms video search engines understand
+- DO NOT use generic keywords like 'celebration' if it's a business promotion - use business-specific terms
 
 IMPORTANT: 
 - Always generate an ORIGINAL caption that enhances and transforms the input text
@@ -96,9 +106,10 @@ IMPORTANT:
 Return ONLY valid JSON in this exact format:
 {
   \"caption\": \"[Your creative, original caption - clean text only, no explanations]\",
-  \"video_keywords\": [\"visual keyword1\", \"visual keyword2\", \"visual keyword3\", \"atmospheric keyword4\", \"activity keyword5\"],
+  \"video_keywords\": [\"business-specific keyword1\", \"business-specific keyword2\", \"visual keyword3\", \"atmospheric keyword4\", \"activity keyword5\"],
   \"content_analysis\": {
-    \"type\": \"birthday|wedding|corporate|celebration|product|announcement|other\",
+    \"business_type\": \"jewelry|electrical|fashion|restaurant|electronics|automotive|furniture|medical|education|retail|other\",
+    \"type\": \"birthday|wedding|corporate|celebration|product|announcement|sale|promotion|other\",
     \"tone\": \"joyful|professional|elegant|energetic|romantic|warm|sophisticated\",
     \"visual_elements\": \"bright colors|warm lighting|dramatic lighting|natural setting|modern|traditional|elegant\"
   }
@@ -109,16 +120,27 @@ Text to analyze:
 
 JSON:";
 
-        // Default fallback result
+        // Default fallback result - ALWAYS use business-specific keywords
+        $businessType = $this->detectBusinessType($text);
+        $businessKeywords = $this->getBusinessSpecificKeywords($businessType);
+        
         $result = [
             'caption' => $this->fallbackCaption($text),
-            'video_keywords' => $this->extractBasicKeywords($text),
+            'video_keywords' => !empty($businessKeywords) 
+                ? array_slice($businessKeywords, 0, 5) 
+                : $this->extractBasicKeywords($text),
             'content_analysis' => [
+                'business_type' => $businessType,
                 'type' => 'celebration',
                 'tone' => 'joyful',
                 'visual_elements' => 'bright colors'
             ]
         ];
+        
+        \Log::info('Default result with business keywords', [
+            'business_type' => $businessType,
+            'video_keywords' => $result['video_keywords']
+        ]);
 
         try {
             $response = $this->client->post("{$ollamaUrl}/api/generate", [
@@ -127,7 +149,7 @@ JSON:";
                     'prompt' => $prompt,
                     'stream' => false,
                     'options' => [
-                        'num_predict' => 80,   // captions don't need more
+                        'num_predict' => 250,   // Increased to ensure complete JSON response with business keywords
                         'temperature' => 0.4,
                     ],
                 ],
@@ -139,9 +161,22 @@ JSON:";
 
             // Parse JSON response
             if (!empty($aiResponse)) {
-                // Extract JSON from response
+                // Try to extract complete JSON from response
+                // First try: Look for complete JSON object
                 if (preg_match('/\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}/s', $aiResponse, $matches)) {
                     $parsed = json_decode($matches[0], true);
+                    
+                    // If JSON decode failed, try to fix common truncation issues
+                    if (json_last_error() !== JSON_ERROR_NONE) {
+                        // Try to complete truncated JSON
+                        $jsonStr = $matches[0];
+                        // If video_keywords array is incomplete, try to fix it
+                        if (preg_match('/"video_keywords"\s*:\s*\[([^\]]*)/', $jsonStr, $kwMatch)) {
+                            // Try to extract what we have and complete it
+                            $jsonStr = preg_replace('/"video_keywords"\s*:\s*\[[^\]]*/', '"video_keywords":[]', $jsonStr);
+                            $parsed = json_decode($jsonStr, true);
+                        }
+                    }
                     if ($parsed && isset($parsed['caption'])) {
                         // Clean the caption to remove any explanation text
                         $caption = trim($parsed['caption']);
@@ -168,20 +203,75 @@ JSON:";
                         $caption = trim($caption);
                         
                         $parsed['caption'] = $caption;
+                        
+                        // Ensure business_type is set in content_analysis
+                        if (isset($parsed['content_analysis']) && !isset($parsed['content_analysis']['business_type'])) {
+                            $parsed['content_analysis']['business_type'] = $this->detectBusinessType($text);
+                        }
+                        
+                        // ALWAYS ensure business-specific keywords are included
+                        $businessType = $parsed['content_analysis']['business_type'] ?? $this->detectBusinessType($text);
+                        $businessKeywords = $this->getBusinessSpecificKeywords($businessType);
+                        
+                        // If video_keywords exist, enhance them with business keywords
+                        if (isset($parsed['video_keywords']) && is_array($parsed['video_keywords']) && !empty($parsed['video_keywords'])) {
+                            // Prepend business keywords if not already present
+                            $existingKeywords = array_map('strtolower', $parsed['video_keywords']);
+                            foreach ($businessKeywords as $bKeyword) {
+                                if (!in_array(strtolower($bKeyword), $existingKeywords)) {
+                                    array_unshift($parsed['video_keywords'], $bKeyword);
+                                }
+                            }
+                            // Keep only top 5 keywords, prioritizing business-specific ones
+                            $parsed['video_keywords'] = array_slice($parsed['video_keywords'], 0, 5);
+                        } else {
+                            // If no video_keywords or empty, use business-specific keywords
+                            $parsed['video_keywords'] = array_slice($businessKeywords, 0, 5);
+                        }
+                        
+                        // Ensure business_type is set
+                        if (!isset($parsed['content_analysis'])) {
+                            $parsed['content_analysis'] = [];
+                        }
+                        $parsed['content_analysis']['business_type'] = $businessType;
+                        
+                        \Log::info('AI response processed with business keywords', [
+                            'business_type' => $businessType,
+                            'video_keywords' => $parsed['video_keywords'],
+                            'caption_preview' => substr($parsed['caption'], 0, 50)
+                        ]);
+                        
                         $result = $parsed;
                     } else {
                         \Log::warning('AI returned invalid JSON structure', ['parsed' => $parsed]);
                     }
                 } else {
-                    \Log::warning('No valid JSON found in AI response', ['response' => $aiResponse]);
+                    \Log::warning('No valid JSON found in AI response, using business-specific fallback', [
+                        'response' => substr($aiResponse, 0, 200),
+                        'response_length' => strlen($aiResponse)
+                    ]);
+                    // Use business-specific keywords as fallback
+                    $businessType = $this->detectBusinessType($text);
+                    $result['video_keywords'] = array_slice($this->getBusinessSpecificKeywords($businessType), 0, 5);
+                    $result['content_analysis']['business_type'] = $businessType;
                 }
             }
 
         } catch (GuzzleException $e) {
-            \Log::warning('AI content analysis failed, using fallback', [
+            \Log::warning('AI content analysis failed, using business-specific fallback', [
                 'error' => $e->getMessage(),
-                'fallback_caption' => $result['caption']
+                'fallback_caption' => $result['caption'],
+                'business_type' => $result['content_analysis']['business_type'] ?? 'unknown',
+                'video_keywords' => $result['video_keywords']
             ]);
+            
+            // Ensure business-specific keywords are used even on error
+            $businessType = $result['content_analysis']['business_type'] ?? $this->detectBusinessType($text);
+            $businessKeywords = $this->getBusinessSpecificKeywords($businessType);
+            if (!empty($businessKeywords)) {
+                $result['video_keywords'] = array_slice($businessKeywords, 0, 5);
+                $result['content_analysis']['business_type'] = $businessType;
+            }
         }
         
         // Step 2: If target language is not English, translate the caption
@@ -369,31 +459,129 @@ JSON:";
     }
 
     /**
+     * Detect business/branding type from text.
+     */
+    private function detectBusinessType(string $text): string
+    {
+        $textLower = strtolower($text);
+        
+        // Business type detection patterns (order matters - more specific first)
+        if (preg_match('/\b(jewelry|jewellery|gold|silver|diamond|ring|necklace|bracelet|earring|gem|precious|jeweler|ornament)\b/i', $text)) {
+            return 'jewelry';
+        }
+        if (preg_match('/\b(electrical|electric|wiring|appliance|circuit|voltage|wire|socket|switch|bulb|led|fan|motor|electricals)\b/i', $text)) {
+            return 'electrical';
+        }
+        if (preg_match('/\b(fashion|clothing|apparel|garment|dress|shirt|pants|outfit|boutique|wardrobe|textile)\b/i', $text)) {
+            return 'fashion';
+        }
+        if (preg_match('/\b(restaurant|food|cafe|dining|cuisine|menu|chef|cooking|kitchen|meal|dish)\b/i', $text)) {
+            return 'restaurant';
+        }
+        if (preg_match('/\b(electronics|mobile|phone|computer|laptop|tablet|gadget|device|tech|digital)\b/i', $text)) {
+            return 'electronics';
+        }
+        if (preg_match('/\b(automotive|car|vehicle|auto|motorcycle|bike|tire|engine|automobile)\b/i', $text)) {
+            return 'automotive';
+        }
+        if (preg_match('/\b(furniture|sofa|chair|table|bed|cabinet|wooden|furnishing|interior)\b/i', $text)) {
+            return 'furniture';
+        }
+        if (preg_match('/\b(medical|hospital|clinic|doctor|pharmacy|medicine|health|treatment)\b/i', $text)) {
+            return 'medical';
+        }
+        if (preg_match('/\b(education|school|college|university|learning|student|academic|course)\b/i', $text)) {
+            return 'education';
+        }
+        if (preg_match('/\b(retail|shop|store|market|mall|supermarket|grocery|shopping)\b/i', $text)) {
+            return 'retail';
+        }
+        
+        return 'other';
+    }
+
+    /**
+     * Get business-specific video keywords for a given business type.
+     */
+    private function getBusinessSpecificKeywords(string $businessType): array
+    {
+        $keywords = [
+            'jewelry' => ['jewelry store', 'diamond showcase', 'gold jewelry', 'jewelry display', 'luxury jewelry'],
+            'electrical' => ['electrical store', 'electronics shop', 'electrical appliances', 'wiring', 'electrical tools'],
+            'fashion' => ['fashion boutique', 'clothing store', 'fashion display', 'apparel shop', 'fashion retail'],
+            'restaurant' => ['restaurant interior', 'food service', 'dining', 'culinary', 'restaurant ambiance'],
+            'electronics' => ['electronics store', 'tech shop', 'digital devices', 'electronics display', 'technology store'],
+            'automotive' => ['car showroom', 'automotive shop', 'vehicle display', 'auto service', 'car dealership'],
+            'furniture' => ['furniture store', 'home furniture', 'furniture display', 'interior design', 'furniture shop'],
+            'medical' => ['medical facility', 'hospital interior', 'clinic', 'medical equipment', 'healthcare'],
+            'education' => ['school interior', 'classroom', 'education', 'learning environment', 'academic setting'],
+            'retail' => ['retail store', 'shopping', 'store interior', 'retail shop', 'commercial space'],
+        ];
+        
+        return $keywords[$businessType] ?? [];
+    }
+
+    /**
      * Extract basic visual keywords from text for video search when AI is unavailable.
+     * Now includes business-specific keywords for better relevance.
      */
     private function extractBasicKeywords(string $text): array
     {
         $textLower = strtolower($text);
-
-        // Focus on visual and atmospheric keywords that work well for video search
         $visualKeywords = [];
-
-        // Event-specific visual keywords
-        if (strpos($textLower, 'birthday') !== false) {
-            $visualKeywords = ['birthday party', 'celebration lights', 'cake candles', 'colorful balloons', 'happy gathering'];
-        } elseif (strpos($textLower, 'wedding') !== false) {
-            $visualKeywords = ['wedding ceremony', 'romantic lighting', 'elegant flowers', 'bridal gown', 'celebration dance'];
-        } elseif (strpos($textLower, 'corporate') !== false || strpos($textLower, 'business') !== false) {
-            $visualKeywords = ['corporate meeting', 'professional lighting', 'business presentation', 'modern office', 'team celebration'];
-        } elseif (strpos($textLower, 'graduation') !== false) {
-            $visualKeywords = ['graduation ceremony', 'academic gowns', 'celebration crowd', 'achievement moment', 'cap throwing'];
-        } elseif (strpos($textLower, 'anniversary') !== false) {
-            $visualKeywords = ['romantic dinner', 'candlelight', 'love celebration', 'couple dancing', 'elegant atmosphere'];
-        } elseif (strpos($textLower, 'product') !== false || strpos($textLower, 'launch') !== false) {
-            $visualKeywords = ['product showcase', 'modern technology', 'innovation display', 'bright lighting', 'professional presentation'];
-        } else {
-            // Generic celebration keywords
-            $visualKeywords = ['celebration party', 'happy gathering', 'bright lights', 'joyful moment', 'group celebration'];
+        
+        // FIRST: Detect business type and add business-specific keywords
+        $businessType = $this->detectBusinessType($text);
+        
+        switch ($businessType) {
+            case 'jewelry':
+                $visualKeywords = ['jewelry store', 'diamond showcase', 'gold jewelry', 'jewelry display', 'luxury jewelry', 'jewelry shop', 'precious stones'];
+                break;
+            case 'electrical':
+                $visualKeywords = ['electrical store', 'electronics shop', 'electrical appliances', 'wiring', 'electrical tools', 'lighting store', 'electrical equipment'];
+                break;
+            case 'fashion':
+                $visualKeywords = ['fashion boutique', 'clothing store', 'fashion display', 'apparel shop', 'fashion retail', 'clothing boutique'];
+                break;
+            case 'restaurant':
+                $visualKeywords = ['restaurant interior', 'food service', 'dining', 'culinary', 'restaurant ambiance', 'restaurant kitchen', 'dining room'];
+                break;
+            case 'electronics':
+                $visualKeywords = ['electronics store', 'tech shop', 'digital devices', 'electronics display', 'technology store', 'gadget shop'];
+                break;
+            case 'automotive':
+                $visualKeywords = ['car showroom', 'automotive shop', 'vehicle display', 'auto service', 'car dealership'];
+                break;
+            case 'furniture':
+                $visualKeywords = ['furniture store', 'home furniture', 'furniture display', 'interior design', 'furniture shop'];
+                break;
+            case 'medical':
+                $visualKeywords = ['medical facility', 'hospital interior', 'clinic', 'medical equipment', 'healthcare'];
+                break;
+            case 'education':
+                $visualKeywords = ['school interior', 'classroom', 'education', 'learning environment', 'academic setting'];
+                break;
+            case 'retail':
+                $visualKeywords = ['retail store', 'shopping', 'store interior', 'retail shop', 'commercial space'];
+                break;
+            default:
+                // Event-specific visual keywords for non-business content
+                if (strpos($textLower, 'birthday') !== false) {
+                    $visualKeywords = ['birthday party', 'celebration lights', 'cake candles', 'colorful balloons', 'happy gathering'];
+                } elseif (strpos($textLower, 'wedding') !== false) {
+                    $visualKeywords = ['wedding ceremony', 'romantic lighting', 'elegant flowers', 'bridal gown', 'celebration dance'];
+                } elseif (strpos($textLower, 'corporate') !== false || strpos($textLower, 'business') !== false) {
+                    $visualKeywords = ['corporate meeting', 'professional lighting', 'business presentation', 'modern office', 'team celebration'];
+                } elseif (strpos($textLower, 'graduation') !== false) {
+                    $visualKeywords = ['graduation ceremony', 'academic gowns', 'celebration crowd', 'achievement moment', 'cap throwing'];
+                } elseif (strpos($textLower, 'anniversary') !== false) {
+                    $visualKeywords = ['romantic dinner', 'candlelight', 'love celebration', 'couple dancing', 'elegant atmosphere'];
+                } elseif (strpos($textLower, 'product') !== false || strpos($textLower, 'launch') !== false) {
+                    $visualKeywords = ['product showcase', 'modern technology', 'innovation display', 'bright lighting', 'professional presentation'];
+                } else {
+                    // Generic celebration keywords
+                    $visualKeywords = ['celebration party', 'happy gathering', 'bright lights', 'joyful moment', 'group celebration'];
+                }
         }
 
         // Add time/context specific keywords

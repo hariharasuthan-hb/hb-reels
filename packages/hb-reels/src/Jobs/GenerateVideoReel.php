@@ -153,8 +153,17 @@ class GenerateVideoReel implements ShouldQueue
                 // Combine caption with AI keywords to ensure different videos for different content
                 $videoSearchTerm = $this->createOptimalVideoSearch($caption, $videoKeywords);
                 
-                // Add random page number (1-5) to get different videos even with similar searches
-                $randomPage = rand(1, 5);
+                // Add randomness to ensure different videos each time (no repetition):
+                // 1. Random page number (1-15) for maximum variety across Pexels results
+                // 2. Random offset will be applied in PexelsService when selecting from results
+                $randomPage = rand(1, 15);
+                
+                \Log::info('Video search with randomness to prevent repetition', [
+                    'search_term' => $videoSearchTerm,
+                    'page' => $randomPage,
+                    'caption' => substr($caption, 0, 50)
+                ]);
+                
                 $stockVideoPath = $pexelsService->downloadVideo($videoSearchTerm, $randomPage);
 
                 // Determine what to show in the video:
