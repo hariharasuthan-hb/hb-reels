@@ -41,9 +41,19 @@ class PexelsService
         }
 
         try {
-            // Extract keywords from caption
-            $keywords = $this->extractKeywords($caption);
-            $searchQuery = implode(' ', array_slice($keywords, 0, 3)) ?: 'celebration event';
+            // Use the caption directly if it contains good keywords, otherwise extract
+            // This ensures AI-generated captions with specific keywords are used properly
+            $captionLower = strtolower($caption);
+            $hasSpecificKeywords = preg_match('/\b(birthday|wedding|corporate|celebration|party|event|product|launch|anniversary|graduation|festival|gathering|meeting|conference)\b/i', $caption);
+            
+            if ($hasSpecificKeywords && strlen($caption) < 100) {
+                // Use caption directly if it's short and has relevant keywords
+                $searchQuery = $caption;
+            } else {
+                // Extract keywords from caption for longer text
+                $keywords = $this->extractKeywords($caption);
+                $searchQuery = implode(' ', array_slice($keywords, 0, 3)) ?: 'celebration event';
+            }
 
             // Search for videos with retry logic
             $maxRetries = config('eventreel.pexels.max_retries', 3);

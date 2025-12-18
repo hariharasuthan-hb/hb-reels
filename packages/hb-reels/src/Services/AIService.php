@@ -70,15 +70,18 @@ CONTENT ANALYSIS:
 3. Extract key visual and thematic elements (colors, lighting, setting, activities, atmosphere)
 
 CAPTION CREATION - CRITICAL REQUIREMENTS:
-- Create a BRAND NEW, creative, and engaging caption (1-3 lines maximum)
-- DO NOT copy or repeat the original text word-for-word
+- Create a BRAND NEW, creative, and engaging caption
+- For product announcements, pricing, or contact info: Include ALL details (prices, phone numbers, contact info) - DO NOT truncate
+- DO NOT copy or repeat the original text word-for-word (unless it's essential information like prices/contact details)
 - DO NOT add any explanations, comments, or notes in the caption
 - DO NOT include text like \"(This is...)\" or \"(No corrections needed)\" in the caption
+- DO NOT truncate with \"...\" - show FULL text
 - The caption field must contain ONLY the actual caption text, nothing else
 - Transform the description into an exciting, professional video caption
 - Use dynamic, engaging language that captures the event's energy
-- Make it perfect for video overlay text - concise but impactful
+- Make it perfect for video overlay text - include all important information
 - Focus on the celebration, emotion, and key message
+- For announcements with contact info, prices, or details: preserve ALL information completely
 
 VIDEO SEARCH OPTIMIZATION:
 - Provide 3-5 specific visual keywords for perfect stock footage matching
@@ -209,13 +212,13 @@ Analyze the following text and identify its type (event, announcement, acknowled
 Extract the most important information and format it into 3-5 short lines for a video overlay.
 
 FORMATTING RULES:
-1. Each line should be SHORT (max 50 characters)
-2. Extract the most important information based on the content type
-3. For EVENTS: Include title, date/time, location, highlights, call-to-action
-4. For ANNOUNCEMENTS: Include main message, details, date (if any), call-to-action
-5. For ACKNOWLEDGEMENTS: Include who is being acknowledged, reason, appreciation message
-6. For GENERAL content: Extract key points in logical order
-7. If information is missing, skip that line (don't use 'TBA')
+1. Extract the most important information based on the content type
+2. For EVENTS: Include title, date/time, location, highlights, call-to-action
+3. For ANNOUNCEMENTS: Include main message, details, date (if any), call-to-action
+4. For ACKNOWLEDGEMENTS: Include who is being acknowledged, reason, appreciation message
+5. For GENERAL content: Extract key points in logical order
+6. If information is missing, skip that line (don't use 'TBA')
+7. Include FULL text - do not truncate or abbreviate. The system will handle text wrapping automatically.
 8. Return ONLY a valid JSON object with numbered lines
 
 Required JSON format (use these exact keys):
@@ -239,7 +242,7 @@ JSON:";
                     'prompt' => $prompt,
                     'stream' => false,
                     'options' => [
-                        'num_predict' => 80,   // limit output size
+                        'num_predict' => 200,   // Increased to allow longer captions
                         'temperature' => 0.4,
                     ],
                 ],
@@ -342,18 +345,15 @@ JSON:";
                 // Apply grammar checking to each line
                 $processedLine = $this->grammarService->checkGrammar($sentences[$i], $language);
 
-                // Truncate to 50 chars if needed
-                $line = substr($processedLine, 0, 50);
-                if (strlen($processedLine) > 50) {
-                    $line = substr($line, 0, 47) . '...';
-                }
-                $lines["line" . ($i + 1)] = $line;
+                // Don't truncate - let VideoRenderer handle text wrapping
+                // Full text will be displayed and wrapped automatically
+                $lines["line" . ($i + 1)] = $processedLine;
             }
         }
         
         // Ensure we have at least one line
         if (empty($lines)) {
-            $lines['line1'] = substr($text, 0, 50);
+            $lines['line1'] = $text; // Don't truncate - show full text
         }
         
         // Translate if target language is not English

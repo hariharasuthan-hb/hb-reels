@@ -115,6 +115,12 @@
                     Set as background video for homepage section
                 </label>
             </div>
+            <div class="mt-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <p class="text-sm text-blue-800 font-medium mb-1">✨ AI Video Generation</p>
+                <p class="text-sm text-blue-700">
+                    When "Set as background video" is checked and no video is uploaded, the system will automatically generate a relevant pixel/motion background video based on your title, description, and content using AI. The video will be fetched from Pexels and optimized for AI caption overlays.
+                </p>
+            </div>
             <p class="mt-1 text-sm text-gray-500">Max size: 50MB. Formats: MP4, MOV, AVI, WMV. When checked, video will be used as background instead of content.</p>
         </div>
 
@@ -289,6 +295,12 @@
         });
     });
 </script>
+
+
+
+
+
+
 
 
 

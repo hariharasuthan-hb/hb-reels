@@ -148,8 +148,14 @@ class GenerateVideoReel implements ShouldQueue
                 // This applies when:
                 // - Only one caption line exists, OR
                 // - Multiple videos feature is disabled (ENABLE_MULTIPLE_VIDEO=false)
+                
+                // Use AI-generated video keywords for better video relevance
+                // Combine caption with AI keywords to ensure different videos for different content
                 $videoSearchTerm = $this->createOptimalVideoSearch($caption, $videoKeywords);
-                $stockVideoPath = $pexelsService->downloadVideo($videoSearchTerm);
+                
+                // Add random page number (1-5) to get different videos even with similar searches
+                $randomPage = rand(1, 5);
+                $stockVideoPath = $pexelsService->downloadVideo($videoSearchTerm, $randomPage);
 
                 // Determine what to show in the video:
                 // - If showFlyer is TRUE: Show flyer only, no captions
@@ -315,44 +321,34 @@ class GenerateVideoReel implements ShouldQueue
      */
     private function createOptimalVideoSearch(string $caption, array $videoKeywords): string
     {
-        // If we have AI-generated keywords, use them as primary search terms
+        // PRIORITY: Use AI-generated video keywords first (they are optimized for video search)
         if (!empty($videoKeywords)) {
-            // Take top 3 AI keywords for best relevance
-            $primaryKeywords = array_slice($videoKeywords, 0, 3);
+            // Take top 3-5 AI keywords for best relevance and variety
+            $primaryKeywords = array_slice($videoKeywords, 0, 5);
+            $searchTerms = array_unique($primaryKeywords);
+            
+            \Log::info('Using AI-generated video keywords for search', [
+                'keywords' => $searchTerms,
+                'caption' => substr($caption, 0, 100)
+            ]);
 
-            // Add some fallback keywords if AI keywords are too specific
-            $searchTerms = $primaryKeywords;
-
-            // If AI keywords don't include obvious terms, add contextual ones
-            $hasContext = false;
-            foreach ($videoKeywords as $keyword) {
-                if (in_array(strtolower($keyword), ['birthday', 'wedding', 'celebration', 'party', 'event', 'corporate'])) {
-                    $hasContext = true;
-                    break;
-                }
-            }
-
-            if (!$hasContext) {
-                // Add contextual terms based on caption content
-                if (stripos($caption, 'birthday') !== false) {
-                    $searchTerms[] = 'birthday';
-                } elseif (stripos($caption, 'wedding') !== false) {
-                    $searchTerms[] = 'wedding';
-                } else {
-                    $searchTerms[] = 'celebration';
-                }
-            }
-
-            return implode(' ', array_unique($searchTerms));
+            return implode(' ', $searchTerms);
         }
 
-        // Fallback to caption-based keyword extraction
+        // Fallback: Extract keywords from caption if AI keywords not available
         $words = explode(' ', strtolower($caption));
         $keywords = array_filter($words, function($word) {
-            return strlen($word) > 3 && !in_array($word, ['this', 'that', 'with', 'from', 'your', 'will', 'have', 'been', 'were']);
+            return strlen($word) > 3 && !in_array($word, ['this', 'that', 'with', 'from', 'your', 'will', 'have', 'been', 'were', 'the', 'and', 'for', 'are', 'but', 'not', 'you', 'all', 'can', 'her', 'was', 'one', 'our', 'out', 'day', 'get', 'has', 'him', 'his', 'how', 'its', 'may', 'new', 'now', 'old', 'see', 'two', 'way', 'who', 'boy', 'did', 'its', 'let', 'put', 'say', 'she', 'too', 'use']);
         });
 
-        return implode(' ', array_slice($keywords, 0, 3)) ?: 'celebration event';
+        $fallbackSearch = implode(' ', array_slice($keywords, 0, 3)) ?: 'celebration event';
+        
+        \Log::info('Using fallback keyword extraction for video search', [
+            'search_terms' => $fallbackSearch,
+            'caption' => substr($caption, 0, 100)
+        ]);
+        
+        return $fallbackSearch;
     }
 
     /**
