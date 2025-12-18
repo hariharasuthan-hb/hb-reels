@@ -461,18 +461,22 @@ class VideoRenderer
                     // Track the last output label for use in trim filter
                     $lastTextLabel = $outputLabel;
 
-                    // Draw text centered on screen with light gray semi-transparent background box
+                    // Draw text centered on screen with dark semi-transparent background box
                     // Use SINGLE QUOTES for text parameter - this is the safest approach
                     // Text is already escaped by escapeDrawtext() function
                     // Text is perfectly centered horizontally using (w-text_w)/2
-                    // Light gray overlay (box) for better readability
+                    // Dark black overlay (box) for maximum readability on all color images
                     // Ensure Y position is properly aligned (no sub-pixel rendering)
                     $alignedY = intval($currentY);
                     
+                    // Use fully opaque black background for maximum caption visibility
+                    // FFmpeg drawtext boxcolor format: 0xRRGGBB@alpha where alpha is 0.0-1.0
+                    // 0x000000@1.0 = fully opaque black, or use 0x000000FF for 8-bit alpha
+                    // Increasing boxborderw to 15 for better padding around text
                     if ($fontFile && file_exists($fontFile)) {
                         $filters[] = sprintf(
                             "%sdrawtext=fontfile='%s':text='%s':fontsize=%d:fontcolor=white:" .
-                            "x=(w-text_w)/2:y=%d:box=1:boxcolor=0xD0D0D0@0.5:boxborderw=10%s",
+                            "x=(w-text_w)/2:y=%d:box=1:boxcolor=0x000000@1.0:boxborderw=15%s",
                             $inputLabel,
                             $fontFile, // Font file path in single quotes
                             $safe,      // Text in single quotes (already escaped)
@@ -481,10 +485,10 @@ class VideoRenderer
                             $outputLabel
                         );
                     } else {
-                        // Fallback to system font
+                        // Fallback to system font with fully opaque black background
                         $filters[] = sprintf(
                             "%sdrawtext=font='Arial':text='%s':fontsize=%d:fontcolor=white:" .
-                            "x=(w-text_w)/2:y=%d:box=1:boxcolor=0xD0D0D0@0.5:boxborderw=10%s",
+                            "x=(w-text_w)/2:y=%d:box=1:boxcolor=0x000000@1.0:boxborderw=15%s",
                             $inputLabel,
                             $safe,      // Text in single quotes (already escaped)
                             $fontSize,
@@ -631,7 +635,7 @@ class VideoRenderer
         // - MAXIMUM character spacing (5) for perfect ligature separation
         // - Deep shadow (4) for strong 3D depth effect
         // - Center alignment (5) for professional look
-        // - Semi-transparent background box (&HA0000000) for readability on any background
+        // - Dark semi-transparent background box (&HD0000000) for maximum readability on all color images
         // - BorderStyle=3 for background box like YouTube captions
         // 
         // Supported complex script languages with HarfBuzz shaping via libass:
@@ -643,7 +647,7 @@ class VideoRenderer
         //
         // This ASS style ensures ALL ligatures render perfectly (குடில், नाटक, అక్షర, പദം, ಅಕ್ಷರ, etc.)
         $ass .= sprintf(
-            "Style: Default,%s,%d,&H00FFFFFF,&H000000FF,&H00000000,&HA0000000,-1,0,0,0,100,100,5,0,3,5.0,4,5,30,30,30,1\n\n",
+            "Style: Default,%s,%d,&H00FFFFFF,&H000000FF,&H00000000,&HFF000000,-1,0,0,0,100,100,5,0,3,5.0,4,5,30,30,30,1\n\n",
             $fontName,
             $fontSize
         );
