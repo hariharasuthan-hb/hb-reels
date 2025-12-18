@@ -153,8 +153,19 @@ class PexelsService
                 $data = json_decode($response->getBody()->getContents(), true);
 
                 if (!empty($data['videos'])) {
-                    // For page > 1, use a different video from the results (cycle through)
-                    $videoIndex = ($page - 1) % count($data['videos']);
+                    // Add randomness to video selection to prevent repetition
+                    // Use page number + random offset to select different videos
+                    $randomOffset = rand(0, min(2, count($data['videos']) - 1)); // Random offset 0-2
+                    $videoIndex = (($page - 1) + $randomOffset) % count($data['videos']);
+                    
+                    \Log::info('Video selection with randomness', [
+                        'query' => $query,
+                        'page' => $page,
+                        'total_videos' => count($data['videos']),
+                        'selected_index' => $videoIndex,
+                        'random_offset' => $randomOffset
+                    ]);
+                    
                     return $data['videos'][$videoIndex];
                 }
 

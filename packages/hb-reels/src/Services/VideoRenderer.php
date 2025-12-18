@@ -81,6 +81,16 @@ class VideoRenderer
         
         // Execute FFmpeg
         exec($command . ' 2>&1', $output, $returnCode);
+        
+        // Clean up temporary text files used for drawtext textfile parameter
+        // These are created in sys_get_temp_dir() and should be cleaned up after rendering
+        $tempTextFiles = glob(sys_get_temp_dir() . '/*_text_*.txt');
+        foreach ($tempTextFiles as $textFile) {
+            // Only delete files older than 1 minute (to allow for rendering time)
+            if (file_exists($textFile) && (time() - filemtime($textFile)) > 60) {
+                @unlink($textFile);
+            }
+        }
 
         // Clean up temporary files
         $tempDir = storage_path('app/temp');
@@ -120,6 +130,7 @@ class VideoRenderer
         $filters = [];
         $inputs = [];
         $tempFiles = [];  // Track temporary text files for cleanup
+        $textFiles = [];  // Track text files for drawtext textfile parameter
     
         // Input 1: Stock video
         $inputs[] = sprintf('-i %s', escapeshellarg($stockVideoPath));
@@ -448,6 +459,20 @@ class VideoRenderer
                         ? 25 // Lower limit for complex scripts
                         : 35; // Standard limit for Latin scripts
                     $safe = $this->wrapText($safe, $wrapLimit);
+                    
+                    // Check if text contains problematic characters (colons, commas, quotes)
+                    // If so, use textfile parameter instead of text parameter for better compatibility
+                    $hasSpecialChars = (strpos($safe, ':') !== false || strpos($safe, ',') !== false || 
+                                       strpos($safe, "'") !== false || strpos($safe, '"') !== false);
+                    
+                    // Create text file if needed for complex text
+                    $textFilePath = null;
+                    if ($hasSpecialChars) {
+                        $textFile = sys_get_temp_dir() . '/' . Str::random(20) . '_text_' . $processedLineIndex . '.txt';
+                        file_put_contents($textFile, $safe);
+                        $textFiles[] = $textFile;
+                        $textFilePath = $textFile;
+                    }
 
                     // Create unique stream labels for each line to chain them properly
                     // CRITICAL: Never use [vout] as output - only trim filter can output [vout]
@@ -473,28 +498,58 @@ class VideoRenderer
                     // FFmpeg drawtext boxcolor format: 0xRRGGBB@alpha where alpha is 0.0-1.0
                     // 0x000000@1.0 = fully opaque black, or use 0x000000FF for 8-bit alpha
                     // Increasing boxborderw to 15 for better padding around text
-                    if ($fontFile && file_exists($fontFile)) {
-                        $filters[] = sprintf(
-                            "%sdrawtext=fontfile='%s':text='%s':fontsize=%d:fontcolor=white:" .
-                            "x=(w-text_w)/2:y=%d:box=1:boxcolor=0x000000@1.0:boxborderw=15%s",
-                            $inputLabel,
-                            $fontFile, // Font file path in single quotes
-                            $safe,      // Text in single quotes (already escaped)
-                            $fontSize,
-                            $alignedY,  // Use aligned Y position
-                            $outputLabel
-                        );
+                    // Use textfile parameter for text with special characters to avoid escaping issues
+                    if ($textFilePath) {
+                        // Use textfile parameter for complex text (avoids escaping issues)
+                        // Escape the textfile path for shell safety
+                        $escapedTextFilePath = str_replace("'", "'\\''", $textFilePath);
+                        if ($fontFile && file_exists($fontFile)) {
+                            $filters[] = sprintf(
+                                "%sdrawtext=fontfile='%s':textfile='%s':fontsize=%d:fontcolor=white:" .
+                                "x=(w-text_w)/2:y=%d:box=1:boxcolor=0x000000@1.0:boxborderw=15%s",
+                                $inputLabel,
+                                $fontFile,
+                                $escapedTextFilePath,
+                                $fontSize,
+                                $alignedY,
+                                $outputLabel
+                            );
+                        } else {
+                            $filters[] = sprintf(
+                                "%sdrawtext=font='Arial':textfile='%s':fontsize=%d:fontcolor=white:" .
+                                "x=(w-text_w)/2:y=%d:box=1:boxcolor=0x000000@1.0:boxborderw=15%s",
+                                $inputLabel,
+                                $escapedTextFilePath,
+                                $fontSize,
+                                $alignedY,
+                                $outputLabel
+                            );
+                        }
                     } else {
-                        // Fallback to system font with fully opaque black background
-                        $filters[] = sprintf(
-                            "%sdrawtext=font='Arial':text='%s':fontsize=%d:fontcolor=white:" .
-                            "x=(w-text_w)/2:y=%d:box=1:boxcolor=0x000000@1.0:boxborderw=15%s",
-                            $inputLabel,
-                            $safe,      // Text in single quotes (already escaped)
-                            $fontSize,
-                            $alignedY,  // Use aligned Y position
-                            $outputLabel
-                        );
+                        // Use text parameter for simple text (no special characters)
+                        if ($fontFile && file_exists($fontFile)) {
+                            $filters[] = sprintf(
+                                "%sdrawtext=fontfile='%s':text='%s':fontsize=%d:fontcolor=white:" .
+                                "x=(w-text_w)/2:y=%d:box=1:boxcolor=0x000000@1.0:boxborderw=15%s",
+                                $inputLabel,
+                                $fontFile, // Font file path in single quotes
+                                $safe,      // Text in single quotes (already escaped)
+                                $fontSize,
+                                $alignedY,  // Use aligned Y position
+                                $outputLabel
+                            );
+                        } else {
+                            // Fallback to system font with fully opaque black background
+                            $filters[] = sprintf(
+                                "%sdrawtext=font='Arial':text='%s':fontsize=%d:fontcolor=white:" .
+                                "x=(w-text_w)/2:y=%d:box=1:boxcolor=0x000000@1.0:boxborderw=15%s",
+                                $inputLabel,
+                                $safe,      // Text in single quotes (already escaped)
+                                $fontSize,
+                                $alignedY,  // Use aligned Y position
+                                $outputLabel
+                            );
+                        }
                     }
 
                     $currentY += $yStep;
@@ -592,6 +647,15 @@ class VideoRenderer
             $duration,
             escapeshellarg($outputPath)
         );
+        
+        // Store text files for cleanup after rendering
+        // Note: These will be cleaned up by the calling function or system temp cleanup
+        if (!empty($textFiles)) {
+            \Log::info('Created text files for drawtext', [
+                'text_files' => $textFiles,
+                'count' => count($textFiles)
+            ]);
+        }
     
         return $command;
     }
@@ -951,19 +1015,25 @@ class VideoRenderer
      */
     private function escapeDrawtext(string $text): string
     {
-        // Escape in this order to avoid double-escaping:
-        // 1. Backslashes first (so they don't interfere with other escaping)
-        // 2. Single quotes (escape as \')
-        // 3. Double quotes (escape as \")
-        // 4. Colons (escape as \:) - they are parameter separators
-        // 5. Commas (escape as \,) - they are filter separators in filter_complex (CRITICAL!)
+        // CRITICAL: FFmpeg drawtext text parameter escaping
+        // When using single quotes around text='...', we need to:
+        // 1. Escape single quotes properly (end quote, escaped quote, start quote: 'text'\''more')
+        // 2. Escape backslashes as \\ (so they don't interfere)
+        // 3. Colons and commas are LITERAL in single quotes, so we don't escape them
+        //    BUT: If text contains colons/commas, we should use textfile parameter instead
+        //    This function is for simple text that will use text= parameter
         
         $escaped = $text;
-        $escaped = str_replace('\\', '\\\\', $escaped);  // Escape backslashes first
-        $escaped = str_replace("'", "\\'", $escaped);     // Escape single quotes
-        $escaped = str_replace('"', '\\"', $escaped);     // Escape double quotes
-        $escaped = str_replace(':', '\\:', $escaped);      // Escape colons
-        $escaped = str_replace(',', '\\,', $escaped);      // Escape commas (CRITICAL!)
+        
+        // Step 1: Escape backslashes first (must be first to avoid double-escaping)
+        $escaped = str_replace('\\', '\\\\', $escaped);
+        
+        // Step 2: Escape single quotes properly for single-quoted strings
+        // In single quotes: 'text'\''more' means: text + ' + more
+        $escaped = str_replace("'", "'\\''", $escaped);
+        
+        // Step 3: Do NOT escape colons/commas - they are literal in single quotes
+        // If text has colons/commas, the caller should use textfile parameter instead
         
         return $escaped;
     }
