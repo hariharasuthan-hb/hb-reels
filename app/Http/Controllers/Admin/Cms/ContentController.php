@@ -72,6 +72,9 @@ class ContentController extends Controller
     {
         $data = $request->validated();
 
+        // HTML checkboxes only submit when checked; make sure "unchecked" persists as false.
+        $data['is_active'] = $request->has('is_active');
+
         // Handle image upload
         if ($request->hasFile('image')) {
             $data['image'] = $this->imageService->upload(
@@ -133,6 +136,9 @@ class ContentController extends Controller
     {
         $content = $this->repository->findOrFail($id);
         $data = $request->validated();
+
+        // HTML checkboxes only submit when checked; make sure "unchecked" persists as false.
+        $data['is_active'] = $request->has('is_active');
 
         // Remove image if requested
         if ($request->boolean('remove_image')) {
