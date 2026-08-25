@@ -1,4 +1,10 @@
 import '../bootstrap';
+import Alpine from 'alpinejs';
+import registerCarousel from './carousel';
+
+window.Alpine = Alpine;
+registerCarousel(Alpine);
+Alpine.start();
 
 // Frontend specific JavaScript
 document.addEventListener('DOMContentLoaded', function() {
@@ -34,4 +40,3 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 });
-

@@ -91,9 +91,19 @@
                 {!! render_content($servicesDescription) !!}
             </p>
         </div>
-        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+        <x-carousel
+            :per-view-sm="1"
+            :per-view-md="2"
+            :per-view-lg="3"
+            :gap="32"
+            :autoplay="true"
+            :loop="true"
+            :interval="4000"
+            :show-arrows="true"
+            :show-dots="true"
+        >
             @foreach($services as $service)
-                <div class="bg-white rounded-lg shadow-lg p-6 hover:shadow-xl transition">
+                <div class="carousel-slide bg-white rounded-lg shadow-lg p-6 hover:shadow-xl transition">
                     @if(isset($service['video']) && $service['video'])
                         <video class="w-full h-48 object-cover rounded-lg mb-4" controls>
                             <source src="{{ $service['video'] }}" type="video/mp4">
@@ -109,7 +119,7 @@
                     </a>
                 </div>
             @endforeach
-        </div>
+        </x-carousel>
     </div>
 </section>
 

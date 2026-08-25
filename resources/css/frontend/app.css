@@ -164,20 +164,24 @@ section#services {
   text-align: center;
 }
 
-section#services .grid > div {
+section#services .carousel-slide {
   text-align: center;
 }
 
-section#services .grid > div h3 {
+section#services .carousel-slide h3 {
   text-align: center;
 }
 
-section#services .grid > div p {
+section#services .carousel-slide p {
   text-align: center;
 }
 
-section#services .grid > div a {
+section#services .carousel-slide a {
   display: inline-block;
   text-align: center;
+}
+
+[x-cloak] {
+  display: none !important;
 }
 
