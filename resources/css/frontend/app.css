@@ -159,6 +159,13 @@ article header p {
   }
 }
 
+/* Keep homepage sections below the sticky header when jumped to from the menu */
+section#about,
+section#services,
+section#contact {
+  scroll-margin-top: 6rem;
+}
+
 /* Center Alignment for Services Section on Home Page */
 section#services {
   text-align: center;
