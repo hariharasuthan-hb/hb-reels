@@ -36,6 +36,10 @@ class Menu extends Model
      */
     public function getFullUrlAttribute()
     {
+        if (is_string($this->url) && str_starts_with($this->url, '#')) {
+            return '/' . $this->url;
+        }
+
         if ($this->route) {
             // Check if route requires authentication and user is not authenticated
             if ($this->route === 'member.dashboard' && !auth()->check()) {

@@ -26,16 +26,44 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
-    // Smooth scroll for anchor links
-    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+    // Smooth scroll for homepage section links (#about, /#services, etc.)
+    document.querySelectorAll('a[href*="#"]').forEach(anchor => {
         anchor.addEventListener('click', function (e) {
+            const href = this.getAttribute('href');
+            if (!href || href === '#') {
+                return;
+            }
+
+            let url;
+            try {
+                url = new URL(href, window.location.origin);
+            } catch (err) {
+                return;
+            }
+
+            if (!url.hash || url.hash === '#') {
+                return;
+            }
+
+            const samePage = url.pathname.replace(/\/$/, '') === window.location.pathname.replace(/\/$/, '');
+            if (!samePage) {
+                return;
+            }
+
+            const target = document.querySelector(url.hash);
+            if (!target) {
+                return;
+            }
+
             e.preventDefault();
-            const target = document.querySelector(this.getAttribute('href'));
-            if (target) {
-                target.scrollIntoView({
-                    behavior: 'smooth',
-                    block: 'start'
-                });
+            const header = document.querySelector('header');
+            const offset = header ? header.offsetHeight + 12 : 0;
+            const top = target.getBoundingClientRect().top + window.scrollY - offset;
+            window.scrollTo({ top, behavior: 'smooth' });
+            history.pushState(null, '', url.pathname + url.hash);
+
+            if (mobileMenu) {
+                mobileMenu.classList.add('hidden');
             }
         });
     });
